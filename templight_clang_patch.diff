@@ -1,0 +1,736 @@
+Index: include/clang/FrontendTool/Utils.h
+===================================================================
+--- include/clang/FrontendTool/Utils.h	(revision 219067)
++++ include/clang/FrontendTool/Utils.h	(working copy)
+@@ -18,7 +18,10 @@
+ namespace clang {
+ 
+ class CompilerInstance;
++class FrontendAction;
+ 
++FrontendAction *CreateFrontendAction(CompilerInstance &CI);
++
+ /// ExecuteCompilerInvocation - Execute the given actions described by the
+ /// compiler invocation object in the given compiler instance.
+ ///
+Index: include/clang/Sema/ActiveTemplateInst.h
+===================================================================
+--- include/clang/Sema/ActiveTemplateInst.h	(revision 0)
++++ include/clang/Sema/ActiveTemplateInst.h	(working copy)
+@@ -0,0 +1,139 @@
++//===--- ActiveTemplateInst.h - Active Template Instantiation Records --------------*- C++ -*-===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// This file defines the ActiveTemplateInstantiation class, which represents
++// a template instantiation during semantic analysis.
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef LLVM_CLANG_ACTIVE_TEMPLATE_INST_H
++#define LLVM_CLANG_ACTIVE_TEMPLATE_INST_H
++
++#include "clang/Basic/SourceLocation.h"
++
++namespace clang {
++  
++  class Decl;
++  class NamedDecl;
++  class TemplateArgument;
++
++namespace sema {
++  class TemplateDeductionInfo;
++}
++
++
++/// \brief A template instantiation that is currently in progress.
++class ActiveTemplateInstantiation {
++public:
++  /// \brief The kind of template instantiation we are performing
++  enum InstantiationKind {
++    /// We are instantiating a template declaration. The entity is
++    /// the declaration we're instantiating (e.g., a CXXRecordDecl).
++    TemplateInstantiation,
++
++    /// We are instantiating a default argument for a template
++    /// parameter. The Entity is the template, and
++    /// TemplateArgs/NumTemplateArguments provides the template
++    /// arguments as specified.
++    /// FIXME: Use a TemplateArgumentList
++    DefaultTemplateArgumentInstantiation,
++
++    /// We are instantiating a default argument for a function.
++    /// The Entity is the ParmVarDecl, and TemplateArgs/NumTemplateArgs
++    /// provides the template arguments as specified.
++    DefaultFunctionArgumentInstantiation,
++
++    /// We are substituting explicit template arguments provided for
++    /// a function template. The entity is a FunctionTemplateDecl.
++    ExplicitTemplateArgumentSubstitution,
++
++    /// We are substituting template argument determined as part of
++    /// template argument deduction for either a class template
++    /// partial specialization or a function template. The
++    /// Entity is either a ClassTemplatePartialSpecializationDecl or
++    /// a FunctionTemplateDecl.
++    DeducedTemplateArgumentSubstitution,
++
++    /// We are substituting prior template arguments into a new
++    /// template parameter. The template parameter itself is either a
++    /// NonTypeTemplateParmDecl or a TemplateTemplateParmDecl.
++    PriorTemplateArgumentSubstitution,
++
++    /// We are checking the validity of a default template argument that
++    /// has been used when naming a template-id.
++    DefaultTemplateArgumentChecking,
++
++    /// We are instantiating the exception specification for a function
++    /// template which was deferred until it was needed.
++    ExceptionSpecInstantiation,
++    
++    /// Added for Template instantiation observation
++    /// Memoization means we are _not_ instantiating a template because 
++    /// it is already instantiated (but we entered a context where we 
++    /// would have had to if it was not already instantiated).
++    Memoization
++    
++  } Kind;
++
++  /// \brief The point of instantiation within the source code.
++  SourceLocation PointOfInstantiation;
++
++  /// \brief The template (or partial specialization) in which we are
++  /// performing the instantiation, for substitutions of prior template
++  /// arguments.
++  NamedDecl *Template;
++
++  /// \brief The entity that is being instantiated.
++  Decl *Entity;
++
++  /// \brief The list of template arguments we are substituting, if they
++  /// are not part of the entity.
++  const TemplateArgument *TemplateArgs;
++
++  /// \brief The number of template arguments in TemplateArgs.
++  unsigned NumTemplateArgs;
++
++  /// \brief The template deduction info object associated with the
++  /// substitution or checking of explicit or deduced template arguments.
++  sema::TemplateDeductionInfo *DeductionInfo;
++
++  /// \brief The source range that covers the construct that cause
++  /// the instantiation, e.g., the template-id that causes a class
++  /// template instantiation.
++  SourceRange InstantiationRange;
++
++  ActiveTemplateInstantiation()
++    : Kind(TemplateInstantiation), Template(0), Entity(0), TemplateArgs(0),
++      NumTemplateArgs(0), DeductionInfo(0) {}
++
++  /// \brief Determines whether this template is an actual instantiation
++  /// that should be counted toward the maximum instantiation depth.
++  bool isInstantiationRecord() const;
++
++};
++
++
++bool operator==(const ActiveTemplateInstantiation &X,
++                const ActiveTemplateInstantiation &Y);
++
++inline
++bool operator!=(const ActiveTemplateInstantiation &X,
++                const ActiveTemplateInstantiation &Y) {
++  return !(X == Y);
++}
++
++
++
++}
++
++
++#endif
++
++
++
+Index: include/clang/Sema/Sema.h
+===================================================================
+--- include/clang/Sema/Sema.h	(revision 219067)
++++ include/clang/Sema/Sema.h	(working copy)
+@@ -31,6 +31,7 @@
+ #include "clang/Basic/Specifiers.h"
+ #include "clang/Basic/TemplateKinds.h"
+ #include "clang/Basic/TypeTraits.h"
++#include "clang/Sema/ActiveTemplateInst.h"
+ #include "clang/Sema/AnalysisBasedWarnings.h"
+ #include "clang/Sema/DeclSpec.h"
+ #include "clang/Sema/ExternalSemaSource.h"
+@@ -160,6 +161,7 @@
+   class TemplateArgumentList;
+   class TemplateArgumentLoc;
+   class TemplateDecl;
++  class TemplateInstantiationObserver;
+   class TemplateParameterList;
+   class TemplatePartialOrderingContext;
+   class TemplateTemplateParmDecl;
+@@ -6155,120 +6157,6 @@
+                                bool RelativeToPrimary = false,
+                                const FunctionDecl *Pattern = nullptr);
+ 
+-  /// \brief A template instantiation that is currently in progress.
+-  struct ActiveTemplateInstantiation {
+-    /// \brief The kind of template instantiation we are performing
+-    enum InstantiationKind {
+-      /// We are instantiating a template declaration. The entity is
+-      /// the declaration we're instantiating (e.g., a CXXRecordDecl).
+-      TemplateInstantiation,
+-
+-      /// We are instantiating a default argument for a template
+-      /// parameter. The Entity is the template, and
+-      /// TemplateArgs/NumTemplateArguments provides the template
+-      /// arguments as specified.
+-      /// FIXME: Use a TemplateArgumentList
+-      DefaultTemplateArgumentInstantiation,
+-
+-      /// We are instantiating a default argument for a function.
+-      /// The Entity is the ParmVarDecl, and TemplateArgs/NumTemplateArgs
+-      /// provides the template arguments as specified.
+-      DefaultFunctionArgumentInstantiation,
+-
+-      /// We are substituting explicit template arguments provided for
+-      /// a function template. The entity is a FunctionTemplateDecl.
+-      ExplicitTemplateArgumentSubstitution,
+-
+-      /// We are substituting template argument determined as part of
+-      /// template argument deduction for either a class template
+-      /// partial specialization or a function template. The
+-      /// Entity is either a ClassTemplatePartialSpecializationDecl or
+-      /// a FunctionTemplateDecl.
+-      DeducedTemplateArgumentSubstitution,
+-
+-      /// We are substituting prior template arguments into a new
+-      /// template parameter. The template parameter itself is either a
+-      /// NonTypeTemplateParmDecl or a TemplateTemplateParmDecl.
+-      PriorTemplateArgumentSubstitution,
+-
+-      /// We are checking the validity of a default template argument that
+-      /// has been used when naming a template-id.
+-      DefaultTemplateArgumentChecking,
+-
+-      /// We are instantiating the exception specification for a function
+-      /// template which was deferred until it was needed.
+-      ExceptionSpecInstantiation
+-    } Kind;
+-
+-    /// \brief The point of instantiation within the source code.
+-    SourceLocation PointOfInstantiation;
+-
+-    /// \brief The template (or partial specialization) in which we are
+-    /// performing the instantiation, for substitutions of prior template
+-    /// arguments.
+-    NamedDecl *Template;
+-
+-    /// \brief The entity that is being instantiated.
+-    Decl *Entity;
+-
+-    /// \brief The list of template arguments we are substituting, if they
+-    /// are not part of the entity.
+-    const TemplateArgument *TemplateArgs;
+-
+-    /// \brief The number of template arguments in TemplateArgs.
+-    unsigned NumTemplateArgs;
+-
+-    /// \brief The template deduction info object associated with the
+-    /// substitution or checking of explicit or deduced template arguments.
+-    sema::TemplateDeductionInfo *DeductionInfo;
+-
+-    /// \brief The source range that covers the construct that cause
+-    /// the instantiation, e.g., the template-id that causes a class
+-    /// template instantiation.
+-    SourceRange InstantiationRange;
+-
+-    ActiveTemplateInstantiation()
+-      : Kind(TemplateInstantiation), Template(nullptr), Entity(nullptr),
+-        TemplateArgs(nullptr), NumTemplateArgs(0), DeductionInfo(nullptr) {}
+-
+-    /// \brief Determines whether this template is an actual instantiation
+-    /// that should be counted toward the maximum instantiation depth.
+-    bool isInstantiationRecord() const;
+-
+-    friend bool operator==(const ActiveTemplateInstantiation &X,
+-                           const ActiveTemplateInstantiation &Y) {
+-      if (X.Kind != Y.Kind)
+-        return false;
+-
+-      if (X.Entity != Y.Entity)
+-        return false;
+-
+-      switch (X.Kind) {
+-      case TemplateInstantiation:
+-      case ExceptionSpecInstantiation:
+-        return true;
+-
+-      case PriorTemplateArgumentSubstitution:
+-      case DefaultTemplateArgumentChecking:
+-        return X.Template == Y.Template && X.TemplateArgs == Y.TemplateArgs;
+-
+-      case DefaultTemplateArgumentInstantiation:
+-      case ExplicitTemplateArgumentSubstitution:
+-      case DeducedTemplateArgumentSubstitution:
+-      case DefaultFunctionArgumentInstantiation:
+-        return X.TemplateArgs == Y.TemplateArgs;
+-
+-      }
+-
+-      llvm_unreachable("Invalid InstantiationKind!");
+-    }
+-
+-    friend bool operator!=(const ActiveTemplateInstantiation &X,
+-                           const ActiveTemplateInstantiation &Y) {
+-      return !(X == Y);
+-    }
+-  };
+-
+   /// \brief List of active template instantiations.
+   ///
+   /// This vector is treated as a stack. As one template instantiation
+@@ -6313,6 +6201,14 @@
+   /// to implement it anywhere else.
+   ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
+ 
++  /// \brief The template instantiation observer to trace or track 
++  /// instantiations (observers can be chained).
++  ///
++  /// This observer is used to print, trace or track template
++  /// instantiations as they are being constructed. For example, 
++  /// the 'templight' option is implemented with one such observer.
++  std::unique_ptr<TemplateInstantiationObserver> TemplateInstObserverChain;
++
+   /// \brief The current index into pack expansion arguments that will be
+   /// used for substitution of parameter packs.
+   ///
+Index: include/clang/Sema/TemplateInstObserver.h
+===================================================================
+--- include/clang/Sema/TemplateInstObserver.h	(revision 0)
++++ include/clang/Sema/TemplateInstObserver.h	(working copy)
+@@ -0,0 +1,98 @@
++//===--- TemplateInstObserver.h - Template Instantiation Observer --------------*- C++ -*-===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// This file defines the TemplateInstantiationObserver class, which is the base
++// class for an observer that will be notified (callback) at every template instantiation.
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef LLVM_CLANG_TEMPLATE_INST_OBSERVER_H
++#define LLVM_CLANG_TEMPLATE_INST_OBSERVER_H
++
++#include "clang/Basic/SourceLocation.h"
++
++#include "llvm/Support/Compiler.h"
++#include <memory>
++
++namespace clang {
++  
++  class Sema;
++  class ActiveTemplateInstantiation;
++  
++/// \brief This is a base class for an observer that will be notified (callback) at every template instantiation.
++class TemplateInstantiationObserver {
++public:
++  
++  /// \brief Called before doing AST-parsing.
++  void initialize(const Sema &TheSema) {
++    this->initializeImpl(TheSema);
++    if ( NextObserver )
++      NextObserver->initialize(TheSema);
++  };
++  
++  /// \brief Called after AST-parsing is completed.
++  void finalize(const Sema &TheSema) {
++    this->finalizeImpl(TheSema);
++    if ( NextObserver )
++      NextObserver->finalize(TheSema);
++  };
++  
++  /// \brief Called when instantiation of a template just began.
++  void atTemplateBegin(const Sema &TheSema, const ActiveTemplateInstantiation &Inst) {
++    this->atTemplateBeginImpl(TheSema, Inst);
++    if ( NextObserver )
++      NextObserver->atTemplateBegin(TheSema, Inst);
++  };
++  
++  /// \brief Called when instantiation of a template is just about to end.
++  void atTemplateEnd(const Sema &TheSema, const ActiveTemplateInstantiation& Inst) {
++    this->atTemplateEndImpl(TheSema, Inst);
++    if ( NextObserver )
++      NextObserver->atTemplateEnd(TheSema, Inst);
++  };
++  
++  virtual ~TemplateInstantiationObserver() { };
++  
++  /// \brief Appends a new observer to the end of this list.
++  /// \note This function uses a tail-call recursion (and is not performance-critical).
++  static void appendNewObserver(std::unique_ptr<TemplateInstantiationObserver>& CurrentChain,
++                                TemplateInstantiationObserver* NewObserver) {
++    if ( !CurrentChain ) {
++      CurrentChain.reset(NewObserver);
++      return;
++    };
++    appendNewObserver(CurrentChain->NextObserver, NewObserver);
++  };
++  
++protected:
++  
++  /// \brief Called before doing AST-parsing.
++  virtual void initializeImpl(const Sema &TheSema) { };
++  /// \brief Called after AST-parsing is completed.
++  virtual void finalizeImpl(const Sema &TheSema) { };
++  
++  /// \brief Called when instantiation of a template just began.
++  virtual void atTemplateBeginImpl(const Sema &TheSema, 
++                                   const ActiveTemplateInstantiation& Inst) { };
++  /// \brief Called when instantiation of a template is just about to end.
++  virtual void atTemplateEndImpl(const Sema &TheSema, 
++                                 const ActiveTemplateInstantiation& Inst) { };
++  
++  std::unique_ptr<TemplateInstantiationObserver> NextObserver;
++};
++
++
++
++}
++
++
++#endif
++
++
++
+Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
+===================================================================
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 219067)
++++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
+@@ -31,6 +31,8 @@
+ using namespace clang;
+ using namespace llvm::opt;
+ 
++namespace clang {
++
+ static FrontendAction *CreateFrontendBaseAction(CompilerInstance &CI) {
+   using namespace clang::frontend;
+   StringRef Action("unknown");
+@@ -113,7 +115,7 @@
+ #endif
+ }
+ 
+-static FrontendAction *CreateFrontendAction(CompilerInstance &CI) {
++FrontendAction *CreateFrontendAction(CompilerInstance &CI) {
+   // Create the underlying action.
+   FrontendAction *Act = CreateFrontendBaseAction(CI);
+   if (!Act)
+@@ -161,7 +163,7 @@
+   return Act;
+ }
+ 
+-bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
++bool ExecuteCompilerInvocation(CompilerInstance *Clang) {
+   // Honor -help.
+   if (Clang->getFrontendOpts().ShowHelp) {
+     std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
+@@ -224,3 +226,5 @@
+     BuryPointer(std::move(Act));
+   return Success;
+ }
++
++}
+Index: lib/Parse/ParseAST.cpp
+===================================================================
+--- lib/Parse/ParseAST.cpp	(revision 219067)
++++ lib/Parse/ParseAST.cpp	(working copy)
+@@ -23,6 +23,7 @@
+ #include "clang/Sema/ExternalSemaSource.h"
+ #include "clang/Sema/Sema.h"
+ #include "clang/Sema/SemaConsumer.h"
++#include "clang/Sema/TemplateInstObserver.h"
+ #include "llvm/Support/CrashRecoveryContext.h"
+ #include <cstdio>
+ #include <memory>
+@@ -108,6 +109,11 @@
+   bool OldCollectStats = PrintStats;
+   std::swap(OldCollectStats, S.CollectStats);
+ 
++  // Initialize the template instantiation observer chain.
++  // FIXME: See note on "finalize" below.
++  if (S.TemplateInstObserverChain)
++    S.TemplateInstObserverChain->initialize(S);
++
+   ASTConsumer *Consumer = &S.getASTConsumer();
+ 
+   std::unique_ptr<Parser> ParseOP(
+@@ -153,6 +159,14 @@
+   
+   Consumer->HandleTranslationUnit(S.getASTContext());
+ 
++  // Finalize the template instantiation observer chain.
++  // FIXME: This (and init.) should be done in the Sema class, but because 
++  // Sema does not have a reliable "Finalize" function (it has a 
++  // destructor, but it is not guaranteed to be called ("-disable-free")).
++  // So, do the initialization above and do the finalization here:
++  if (S.TemplateInstObserverChain)
++    S.TemplateInstObserverChain->finalize(S);
++
+   std::swap(OldCollectStats, S.CollectStats);
+   if (PrintStats) {
+     llvm::errs() << "\nSTATISTICS:\n";
+Index: lib/Sema/ActiveTemplateInst.cpp
+===================================================================
+--- lib/Sema/ActiveTemplateInst.cpp	(revision 0)
++++ lib/Sema/ActiveTemplateInst.cpp	(working copy)
+@@ -0,0 +1,74 @@
++//===--- ActiveTemplateInst.cpp - Active Template Instantiation Records ------===//
++//
++//                     The LLVM Compiler Infrastructure
++//
++// This file is distributed under the University of Illinois Open Source
++// License. See LICENSE.TXT for details.
++//
++//===----------------------------------------------------------------------===//
++//
++// This file implements basic operators on the class that represents active template 
++// instantiations during semantic analysis.
++//
++//===----------------------------------------------------------------------===//
++
++#include "clang/Sema/ActiveTemplateInst.h"
++
++#include "llvm/Support/ErrorHandling.h"
++
++namespace clang {
++
++bool operator==(const ActiveTemplateInstantiation &X,
++                const ActiveTemplateInstantiation &Y) {
++  if (X.Kind != Y.Kind)
++    return false;
++
++  if (X.Entity != Y.Entity)
++    return false;
++
++  switch (X.Kind) {
++    case ActiveTemplateInstantiation::TemplateInstantiation:
++    case ActiveTemplateInstantiation::ExceptionSpecInstantiation:
++    case ActiveTemplateInstantiation::Memoization:
++      return true;
++    
++    case ActiveTemplateInstantiation::PriorTemplateArgumentSubstitution:
++    case ActiveTemplateInstantiation::DefaultTemplateArgumentChecking:
++      return X.Template == Y.Template && X.TemplateArgs == Y.TemplateArgs;
++    
++    case ActiveTemplateInstantiation::DefaultTemplateArgumentInstantiation:
++    case ActiveTemplateInstantiation::ExplicitTemplateArgumentSubstitution:
++    case ActiveTemplateInstantiation::DeducedTemplateArgumentSubstitution:
++    case ActiveTemplateInstantiation::DefaultFunctionArgumentInstantiation:
++      return X.TemplateArgs == Y.TemplateArgs;
++  }
++
++  llvm_unreachable("Invalid InstantiationKind!");
++}
++
++bool ActiveTemplateInstantiation::isInstantiationRecord() const {
++  switch (Kind) {
++    case TemplateInstantiation:
++    case ExceptionSpecInstantiation:
++    case DefaultTemplateArgumentInstantiation:
++    case DefaultFunctionArgumentInstantiation:
++    case ExplicitTemplateArgumentSubstitution:
++    case DeducedTemplateArgumentSubstitution:
++    case PriorTemplateArgumentSubstitution:
++      return true;
++
++    case DefaultTemplateArgumentChecking:
++      return false;
++    
++    // FIXME Should this do a break or not? 
++    // Memoization kind should never occur here, so, it doesn't really matter.
++    case Memoization:
++      break;
++  }
++
++  llvm_unreachable("Invalid InstantiationKind!");
++}
++
++
++}
++
+Index: lib/Sema/CMakeLists.txt
+===================================================================
+--- lib/Sema/CMakeLists.txt	(revision 219067)
++++ lib/Sema/CMakeLists.txt	(working copy)
+@@ -3,6 +3,7 @@
+   )
+ 
+ add_clang_library(clangSema
++  ActiveTemplateInst.cpp
+   AnalysisBasedWarnings.cpp
+   AttributeList.cpp
+   CodeCompleteConsumer.cpp
+Index: lib/Sema/Sema.cpp
+===================================================================
+--- lib/Sema/Sema.cpp	(revision 219067)
++++ lib/Sema/Sema.cpp	(working copy)
+@@ -37,6 +37,7 @@
+ #include "clang/Sema/ScopeInfo.h"
+ #include "clang/Sema/SemaConsumer.h"
+ #include "clang/Sema/TemplateDeduction.h"
++#include "clang/Sema/TemplateInstObserver.h"
+ #include "llvm/ADT/APFloat.h"
+ #include "llvm/ADT/DenseMap.h"
+ #include "llvm/ADT/SmallSet.h"
+Index: lib/Sema/SemaTemplateInstantiate.cpp
+===================================================================
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 219067)
++++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
+@@ -23,6 +23,7 @@
+ #include "clang/Sema/Lookup.h"
+ #include "clang/Sema/Template.h"
+ #include "clang/Sema/TemplateDeduction.h"
++#include "clang/Sema/TemplateInstObserver.h"
+ 
+ using namespace clang;
+ using namespace sema;
+@@ -182,24 +183,6 @@
+   return Result;
+ }
+ 
+-bool Sema::ActiveTemplateInstantiation::isInstantiationRecord() const {
+-  switch (Kind) {
+-  case TemplateInstantiation:
+-  case ExceptionSpecInstantiation:
+-  case DefaultTemplateArgumentInstantiation:
+-  case DefaultFunctionArgumentInstantiation:
+-  case ExplicitTemplateArgumentSubstitution:
+-  case DeducedTemplateArgumentSubstitution:
+-  case PriorTemplateArgumentSubstitution:
+-    return true;
+-
+-  case DefaultTemplateArgumentChecking:
+-    return false;
+-  }
+-
+-  llvm_unreachable("Invalid InstantiationKind!");
+-}
+-
+ void Sema::InstantiatingTemplate::Initialize(
+     ActiveTemplateInstantiation::InstantiationKind Kind,
+     SourceLocation PointOfInstantiation, SourceRange InstantiationRange,
+@@ -220,6 +203,8 @@
+     Inst.InstantiationRange = InstantiationRange;
+     SemaRef.InNonInstantiationSFINAEContext = false;
+     SemaRef.ActiveTemplateInstantiations.push_back(Inst);
++    if ( SemaRef.TemplateInstObserverChain )
++      SemaRef.TemplateInstObserverChain->atTemplateBegin(SemaRef, Inst);
+     if (!Inst.isInstantiationRecord())
+       ++SemaRef.NonInstantiationEntries;
+   }
+@@ -364,6 +349,10 @@
+       SemaRef.ActiveTemplateInstantiationLookupModules.pop_back();
+     }
+ 
++    if ( SemaRef.TemplateInstObserverChain )
++      SemaRef.TemplateInstObserverChain->atTemplateEnd(
++        SemaRef, SemaRef.ActiveTemplateInstantiations.back());
++
+     SemaRef.ActiveTemplateInstantiations.pop_back();
+     Invalid = true;
+   }
+@@ -575,6 +564,9 @@
+         << cast<FunctionDecl>(Active->Entity)
+         << Active->InstantiationRange;
+       break;
++
++    case ActiveTemplateInstantiation::Memoization:
++      break;
+     }
+   }
+ }
+@@ -615,6 +607,9 @@
+       // or deduced template arguments, so SFINAE applies.
+       assert(Active->DeductionInfo && "Missing deduction info pointer");
+       return Active->DeductionInfo;
++
++    case ActiveTemplateInstantiation::Memoization:
++      break;
+     }
+   }
+ 
+Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
+===================================================================
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 219067)
++++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
+@@ -22,6 +22,7 @@
+ #include "clang/Sema/Lookup.h"
+ #include "clang/Sema/PrettyDeclStackTrace.h"
+ #include "clang/Sema/Template.h"
++#include "clang/Sema/TemplateInstObserver.h"
+ 
+ using namespace clang;
+ 
+@@ -3250,7 +3251,7 @@
+   // into a template instantiation for this specific function template
+   // specialization, which is not a SFINAE context, so that we diagnose any
+   // further errors in the declaration itself.
+-  typedef Sema::ActiveTemplateInstantiation ActiveInstType;
++  typedef ActiveTemplateInstantiation ActiveInstType;
+   ActiveInstType &ActiveInst = SemaRef.ActiveTemplateInstantiations.back();
+   if (ActiveInst.Kind == ActiveInstType::ExplicitTemplateArgumentSubstitution ||
+       ActiveInst.Kind == ActiveInstType::DeducedTemplateArgumentSubstitution) {
+@@ -3259,8 +3260,12 @@
+       assert(FunTmpl->getTemplatedDecl() == Tmpl &&
+              "Deduction from the wrong function template?");
+       (void) FunTmpl;
++      if ( SemaRef.TemplateInstObserverChain )
++        SemaRef.TemplateInstObserverChain->atTemplateEnd(SemaRef, ActiveInst);
+       ActiveInst.Kind = ActiveInstType::TemplateInstantiation;
+       ActiveInst.Entity = New;
++      if ( SemaRef.TemplateInstObserverChain )
++        SemaRef.TemplateInstObserverChain->atTemplateBegin(SemaRef, ActiveInst);
+     }
+   }
+ 
+Index: lib/Sema/SemaType.cpp
+===================================================================
+--- lib/Sema/SemaType.cpp	(revision 219067)
++++ lib/Sema/SemaType.cpp	(working copy)
+@@ -30,6 +30,7 @@
+ #include "clang/Sema/Lookup.h"
+ #include "clang/Sema/ScopeInfo.h"
+ #include "clang/Sema/Template.h"
++#include "clang/Sema/TemplateInstObserver.h"
+ #include "llvm/ADT/SmallPtrSet.h"
+ #include "llvm/ADT/SmallString.h"
+ #include "llvm/Support/ErrorHandling.h"
+@@ -5198,6 +5199,15 @@
+       // Try to recover by implicitly importing this module.
+       createImplicitModuleImportForErrorRecovery(Loc, Owner);
+     }
++    else if (Def && TemplateInstObserverChain) {
++      ActiveTemplateInstantiation TempInst;
++      TempInst.Kind = ActiveTemplateInstantiation::Memoization;
++      TempInst.Template = Def;
++      TempInst.Entity = Def;
++      TempInst.PointOfInstantiation = Loc;
++      TemplateInstObserverChain->atTemplateBegin(*this, TempInst);
++      TemplateInstObserverChain->atTemplateEnd(*this, TempInst);
++    }
+ 
+     // We lock in the inheritance model once somebody has asked us to ensure
+     // that a pointer-to-member type is complete.
