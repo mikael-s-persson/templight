@@ -1,4 +1,4 @@
-//===- TemplightAction.h ------ Clang Templight Frontend Action -*- C++ -*-===//
+//===- TemplightAction.cpp ------ Clang Templight Frontend Action -*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
