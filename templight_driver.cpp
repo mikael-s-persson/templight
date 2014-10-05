@@ -463,9 +463,9 @@ int main(int argc_, const char **argv_) {
   int clang_argc = 1;
   for (int i = 1; i < argc_; ++i) {
     if (i < argc_ - 1 && strcmp(argv_[i], "-Xtemplight") == 0) {
-      do {
+//       do {
         templight_argv[templight_argc++] = argv_[++i];   // the word after -Xtemplight
-      } while(i < argc_ - 1 && argv_[i+1][0] != '-');    // take first argument after -Xtemplight 
+//       } while(i < argc_ - 1 && argv_[i+1][0] != '-');    // take first argument after -Xtemplight 
                                                          // and all other words until next '-..' argument
     } else {
       if (strcmp(argv_[i], "-help") == 0) {
