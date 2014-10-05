@@ -183,5 +183,10 @@ Any contribution or work towards such an application is more than welcomed! The 
 
 The [Templar application](https://github.com/schulmar/Templar) was one such early attempt at writing such an application.
 
+## Credits
+
+The original version of Templight was created by Zoltán Borók-Nagy, Zoltán Porkoláb and József Mihalicza:
+http://plc.inf.elte.hu/templight/
+
 
 
