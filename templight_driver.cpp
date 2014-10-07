@@ -454,69 +454,64 @@ int main(int argc_, const char **argv_) {
   llvm::sys::PrintStackTraceOnErrorSignal();
   llvm::PrettyStackTraceProgram X(argc_, argv_);
   
-  // Separate out templight and clang flags.  templight flags are "-Xtemplight <templight_flag>"
-  const char** templight_argv = new const char*[argc_ + 1];  // templight-specific flags
-  templight_argv[0] = argv_[0];
-  int templight_argc = 1;
-  const char** clang_argv = new const char*[argc_ + 1];
-  clang_argv[0] = argv_[0];
-  int clang_argc = 1;
-  for (int i = 1; i < argc_; ++i) {
-    if (i < argc_ - 1 && strcmp(argv_[i], "-Xtemplight") == 0) {
-//       do {
-        templight_argv[templight_argc++] = argv_[++i];   // the word after -Xtemplight
-//       } while(i < argc_ - 1 && argv_[i+1][0] != '-');    // take first argument after -Xtemplight 
-                                                         // and all other words until next '-..' argument
-    } else {
-      if (strcmp(argv_[i], "-help") == 0) {
-        // Print the help for the templight options:
-        PrintTemplightHelp();
-      }
-      clang_argv[clang_argc++] = argv_[i];  // also leave -help to driver (to print its help info too)
-    }
-  }
-  templight_argv[templight_argc] = NULL;    // argv should be NULL-terminated
-  clang_argv[clang_argc] = NULL;
-  
-  cl::ParseCommandLineOptions(
-      templight_argc, templight_argv,
-      "A tool to profile template instantiations in C++ code.\n");
-  
   SmallVector<const char *, 256> argv;
   llvm::SpecificBumpPtrAllocator<char> ArgAllocator;
   std::error_code EC = llvm::sys::Process::GetArgumentVector(
-      argv, llvm::makeArrayRef(clang_argv, clang_argc), ArgAllocator);
+      argv, llvm::makeArrayRef(argv_, argc_), ArgAllocator);
   if (EC) {
     llvm::errs() << "error: couldn't get arguments: " << EC.message() << '\n';
     return 1;
   }
-
+  
+  // Separate out templight and clang flags.  templight flags are "-Xtemplight <templight_flag>"
+  SmallVector<const char *, 256> templight_argv, clang_argv;
+  templight_argv.push_back(argv[0]);
+  clang_argv.push_back(argv[0]);
+  for (int i = 1, size = argv.size(); i < size; ++i) {
+    if (i < size - 1 && strcmp(argv[i], "-Xtemplight") == 0) {
+//       do {
+        templight_argv.push_back(argv[++i]);   // the word after -Xtemplight
+//       } while(i < size - 1 && argv[i+1][0] != '-');    // take first argument after -Xtemplight 
+                                                         // and all other words until next '-..' argument
+    } else {
+      if (strcmp(argv[i], "-help") == 0) {
+        // Print the help for the templight options:
+        PrintTemplightHelp();
+      }
+      clang_argv.push_back(argv[i]);  // also leave -help to driver (to print its help info too)
+    }
+  }
+  
+  cl::ParseCommandLineOptions(
+      templight_argv.size(), &templight_argv[0],
+      "A tool to profile template instantiations in C++ code.\n");
+  
   std::set<std::string> SavedStrings;
   StringSetSaver Saver(SavedStrings);
 
-  // Determines whether we want nullptr markers in argv to indicate response
+  // Determines whether we want nullptr markers in clang_argv to indicate response
   // files end-of-lines. We only use this for the /LINK driver argument.
   bool MarkEOLs = true;
-  if (argv.size() > 1 && StringRef(argv[1]).startswith("-cc1"))
+  if (clang_argv.size() > 1 && StringRef(clang_argv[1]).startswith("-cc1"))
     MarkEOLs = false;
-  llvm::cl::ExpandResponseFiles(Saver, llvm::cl::TokenizeGNUCommandLine, argv,
+  llvm::cl::ExpandResponseFiles(Saver, llvm::cl::TokenizeGNUCommandLine, clang_argv,
                                 MarkEOLs);
 
   bool CanonicalPrefixes = true;
-  for (int i = 1, size = argv.size(); i < size; ++i) {
+  for (int i = 1, size = clang_argv.size(); i < size; ++i) {
     // Skip end-of-line response file markers
-    if (argv[i] == nullptr)
+    if (clang_argv[i] == nullptr)
       continue;
-    if (StringRef(argv[i]) == "-no-canonical-prefixes") {
+    if (StringRef(clang_argv[i]) == "-no-canonical-prefixes") {
       CanonicalPrefixes = false;
       break;
     }
   }
 
-  std::string Path = GetExecutablePath(argv[0], CanonicalPrefixes);
+  std::string Path = GetExecutablePath(clang_argv[0], CanonicalPrefixes);
 
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts =
-      CreateAndPopulateDiagOpts(argv);
+      CreateAndPopulateDiagOpts(clang_argv);
 
   TextDiagnosticPrinter *DiagClient
     = new TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
@@ -544,26 +539,26 @@ int main(int argc_, const char **argv_) {
   
   // Handle -cc1 integrated tools, even if -cc1 was expanded from a response
   // file.
-  auto FirstArg = std::find_if(argv.begin() + 1, argv.end(),
+  auto FirstArg = std::find_if(clang_argv.begin() + 1, clang_argv.end(),
                                [](const char *A) { return A != nullptr; });
-  bool invokeCC1 = (FirstArg != argv.end() && StringRef(*FirstArg).startswith("-cc1"));
+  bool invokeCC1 = (FirstArg != clang_argv.end() && StringRef(*FirstArg).startswith("-cc1"));
   if (invokeCC1) {
     // If -cc1 came from a response file, remove the EOL sentinels.
     if (MarkEOLs) {
-      auto newEnd = std::remove(argv.begin(), argv.end(), nullptr);
-      argv.resize(newEnd - argv.begin());
+      auto newEnd = std::remove(clang_argv.begin(), clang_argv.end(), nullptr);
+      clang_argv.resize(newEnd - clang_argv.begin());
     }
     
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
     
     Res = !CompilerInvocation::CreateFromArgs(
-        Clang->getInvocation(), argv.begin() + 2, argv.end(), Diags);
+        Clang->getInvocation(), clang_argv.begin() + 2, clang_argv.end(), Diags);
     
     // Infer the builtin include path if unspecified.
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
         Clang->getHeaderSearchOpts().ResourceDir.empty())
       Clang->getHeaderSearchOpts().ResourceDir =
-        CompilerInvocation::GetResourcesPath(argv[0], GetExecutablePathVP);
+        CompilerInvocation::GetResourcesPath(clang_argv[0], GetExecutablePathVP);
     
     // Create the compilers actual diagnostics engine.
     Clang->createDiagnostics();
@@ -586,20 +581,20 @@ int main(int argc_, const char **argv_) {
     
     Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags);
     TheDriver.setTitle("templight");
-    SetInstallDir(argv, TheDriver);
+    SetInstallDir(clang_argv, TheDriver);
     
-    ParseProgName(argv, SavedStrings, TheDriver);
+    ParseProgName(clang_argv, SavedStrings, TheDriver);
     
     SetBackdoorDriverOutputsFromEnvVars(TheDriver);
     
-    std::unique_ptr<Compilation> C(TheDriver.BuildCompilation(argv));
+    std::unique_ptr<Compilation> C(TheDriver.BuildCompilation(clang_argv));
     if(!C.get()) {
       Res = 1;
       goto cleanup;
     }
     
     SmallVector<std::pair<int, const Command *>, 4> FailingCommands;
-    ExecuteTemplightJobs(TheDriver, Diags, *C, C->getJobs(), argv[0], FailingCommands);
+    ExecuteTemplightJobs(TheDriver, Diags, *C, C->getJobs(), clang_argv[0], FailingCommands);
     
     // Remove temp files.
     C->CleanupFileList(C->getTempFiles());
@@ -641,9 +636,6 @@ int main(int argc_, const char **argv_) {
   
 cleanup:
   
-  delete[] clang_argv;
-  delete[] templight_argv;
-
   // If any timers were active but haven't been destroyed yet, print their
   // results now.  This happens in -disable-free mode.
   llvm::TimerGroup::printAll(llvm::errs());
