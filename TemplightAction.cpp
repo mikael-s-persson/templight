@@ -52,26 +52,20 @@ void TemplightAction::ExecuteAction() {
   //<<--------------------------------------------------------------
   
   if ( InstProfiler ) {
-    llvm::outs() << " Appending the templight tracer as a template instantiation observer...\n";
     TemplateInstantiationObserver::appendNewObserver(
       CI.getSema().TemplateInstObserverChain,
       new TemplightTracer(CI.getSema(), 
         ( OutputToStdOut ? std::string("stdout") : OutputFilename ),
         OutputFormat, MemoryProfile, OutputInSafeMode, IgnoreSystemInst));
-    llvm::outs() << " Succeeded!\n";
   }
   if ( InteractiveDebug ) {
-    llvm::outs() << " Appending the templight debugger as a template instantiation observer...\n";
     TemplateInstantiationObserver::appendNewObserver(
       CI.getSema().TemplateInstObserverChain,
       new TemplightDebugger(CI.getSema(), 
         MemoryProfile, IgnoreSystemInst));
-    llvm::outs() << " Succeeded!\n";
   }
   
-  llvm::outs() << " Executing the wrapped front-end action...\n";
   WrapperFrontendAction::ExecuteAction();
-  llvm::outs() << " Done!\n";
 }
 void TemplightAction::EndSourceFileAction() {
   WrapperFrontendAction::EndSourceFileAction();

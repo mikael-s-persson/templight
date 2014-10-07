@@ -640,6 +640,9 @@ int main(int argc_, const char **argv_) {
   }
   
 cleanup:
+  
+  delete[] clang_argv;
+  delete[] templight_argv;
 
   // If any timers were active but haven't been destroyed yet, print their
   // results now.  This happens in -disable-free mode.
