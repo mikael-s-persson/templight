@@ -41,13 +41,17 @@ struct RawTraceEntry {
     Entity(0), TimeStamp(0.0), MemoryUsage(0) { };
 };
 
-struct PrintableTraceEntry {
-  bool IsTemplateBegin;
+struct PrintableTraceEntryBegin {
   std::string InstantiationKind;
   std::string Name;
   std::string FileName;
   int Line;
   int Column;
+  double TimeStamp;
+  size_t MemoryUsage;
+};
+
+struct PrintableTraceEntryEnd {
   double TimeStamp;
   size_t MemoryUsage;
 };
@@ -65,36 +69,27 @@ const char* const InstantiationKindStrings[] = {
   "Memoization" };
 
 
-PrintableTraceEntry rawToPrintable(const Sema &TheSema, const RawTraceEntry& Entry) {
-  PrintableTraceEntry Ret;
+PrintableTraceEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawTraceEntry& Entry) {
+  PrintableTraceEntryBegin Ret;
   
-  Ret.IsTemplateBegin = Entry.IsTemplateBegin;
   Ret.InstantiationKind = InstantiationKindStrings[Entry.InstantiationKind];
   
-  if (Entry.IsTemplateBegin) {
-    NamedDecl *NamedTemplate = dyn_cast_or_null<NamedDecl>(Entry.Entity);
-    if (NamedTemplate) {
-      llvm::raw_string_ostream OS(Ret.Name);
-      NamedTemplate->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
-    }
-    
-    PresumedLoc Loc = TheSema.getSourceManager().getPresumedLoc(Entry.PointOfInstantiation);
-    if(!Loc.isInvalid()) {
-      Ret.FileName = Loc.getFilename();
-      Ret.Line = Loc.getLine();
-      Ret.Column = Loc.getColumn();
-    } else {
-      Ret.FileName = "";
-      Ret.Line = 0;
-      Ret.Column = 0;
-    }
+  NamedDecl *NamedTemplate = dyn_cast_or_null<NamedDecl>(Entry.Entity);
+  if (NamedTemplate) {
+    llvm::raw_string_ostream OS(Ret.Name);
+    NamedTemplate->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+  }
+  
+  PresumedLoc Loc = TheSema.getSourceManager().getPresumedLoc(Entry.PointOfInstantiation);
+  if (!Loc.isInvalid()) {
+    Ret.FileName = Loc.getFilename();
+    Ret.Line = Loc.getLine();
+    Ret.Column = Loc.getColumn();
   } else {
-    Ret.Name = "";
     Ret.FileName = "";
     Ret.Line = 0;
     Ret.Column = 0;
   }
-  
   
   Ret.TimeStamp = Entry.TimeStamp;
   Ret.MemoryUsage = Entry.MemoryUsage;
@@ -102,7 +97,9 @@ PrintableTraceEntry rawToPrintable(const Sema &TheSema, const RawTraceEntry& Ent
   return Ret;
 }
 
-
+PrintableTraceEntryEnd rawToPrintableEnd(const Sema &TheSema, const RawTraceEntry& Entry) {
+  return {Entry.TimeStamp, Entry.MemoryUsage};
+}
 
 
 std::string escapeXml(const std::string& Input) {
@@ -156,37 +153,45 @@ struct ScalarEnumerationTraits<
     clang::ActiveTemplateInstantiation::InstantiationKind> {
   static void enumeration(IO &io,
     clang::ActiveTemplateInstantiation::InstantiationKind &value) {
+
+#define def_enum_case(e) \
+  io.enumCase(value, InstantiationKindStrings[e], e)
+
     using namespace clang;
-    io.enumCase(value, "TemplateInstantiation",
-      ActiveTemplateInstantiation::TemplateInstantiation);
-    io.enumCase(value, "DefaultTemplateArgumentInstantiation",
-      ActiveTemplateInstantiation::DefaultTemplateArgumentInstantiation);
-    io.enumCase(value, "DefaultFunctionArgumentInstantiation",
-      ActiveTemplateInstantiation::DefaultFunctionArgumentInstantiation);
-    io.enumCase(value, "ExplicitTemplateArgumentSubstitution",
-      ActiveTemplateInstantiation::ExplicitTemplateArgumentSubstitution);
-    io.enumCase(value, "DeducedTemplateArgumentSubstitution",
-      ActiveTemplateInstantiation::DeducedTemplateArgumentSubstitution);
-    io.enumCase(value, "PriorTemplateArgumentSubstitution",
-      ActiveTemplateInstantiation::PriorTemplateArgumentSubstitution);
-    io.enumCase(value, "DefaultTemplateArgumentChecking",
-      ActiveTemplateInstantiation::DefaultTemplateArgumentChecking);
-    io.enumCase(value, "ExceptionSpecInstantiation",
-      ActiveTemplateInstantiation::ExceptionSpecInstantiation);
-    io.enumCase(value, "Memoization",
-      ActiveTemplateInstantiation::Memoization);
+    def_enum_case(ActiveTemplateInstantiation::TemplateInstantiation);
+    def_enum_case(ActiveTemplateInstantiation::DefaultTemplateArgumentInstantiation);
+    def_enum_case(ActiveTemplateInstantiation::DefaultFunctionArgumentInstantiation);
+    def_enum_case(ActiveTemplateInstantiation::ExplicitTemplateArgumentSubstitution);
+    def_enum_case(ActiveTemplateInstantiation::DeducedTemplateArgumentSubstitution);
+    def_enum_case(ActiveTemplateInstantiation::PriorTemplateArgumentSubstitution);
+    def_enum_case(ActiveTemplateInstantiation::DefaultTemplateArgumentChecking);
+    def_enum_case(ActiveTemplateInstantiation::ExceptionSpecInstantiation);
+    def_enum_case(ActiveTemplateInstantiation::Memoization);
+
+#undef def_enum_case
   }
 };
 
 template <>
-struct MappingTraits<clang::PrintableTraceEntry> {
-  static void mapping(IO &io, clang::PrintableTraceEntry &Entry) {
-    io.mapRequired("IsTemplateBegin", Entry.IsTemplateBegin);
+struct MappingTraits<clang::PrintableTraceEntryBegin> {
+  static void mapping(IO &io, clang::PrintableTraceEntryBegin &Entry) {
+    bool b = true;
+    io.mapRequired("IsBegin", b);
     io.mapRequired("Kind", Entry.InstantiationKind);
     io.mapOptional("Name", Entry.Name);
     io.mapOptional("FileName", Entry.FileName);
     io.mapOptional("Line", Entry.Line);
     io.mapOptional("Column", Entry.Column);
+    io.mapRequired("TimeStamp", Entry.TimeStamp);
+    io.mapOptional("MemoryUsage", Entry.MemoryUsage);
+  }
+};
+
+template <>
+struct MappingTraits<clang::PrintableTraceEntryEnd> {
+  static void mapping(IO &io, clang::PrintableTraceEntryEnd &Entry) {
+    bool b = false;
+    io.mapRequired("IsBegin", b);
     io.mapRequired("TimeStamp", Entry.TimeStamp);
     io.mapOptional("MemoryUsage", Entry.MemoryUsage);
   }
@@ -203,7 +208,8 @@ class TemplightTracer::TracePrinter {
 protected:
   virtual void startTraceImpl(const Sema &) = 0;
   virtual void endTraceImpl(const Sema &) = 0;
-  virtual void printEntryImpl(const Sema &, const PrintableTraceEntry &) = 0;
+  virtual void printEntryImpl(const Sema &, const PrintableTraceEntryBegin &) = 0;
+  virtual void printEntryImpl(const Sema &, const PrintableTraceEntryEnd &) = 0;
   
 public:
   
@@ -221,7 +227,12 @@ public:
   void printRawEntry(const Sema &TheSema, const RawTraceEntry &Entry) {
     if ( shouldIgnoreEntry(Entry) )
       return;
-    this->printEntryImpl(TheSema, rawToPrintable(TheSema, Entry));
+
+    if ( Entry.IsTemplateBegin )
+      this->printEntryImpl(TheSema, rawToPrintableBegin(TheSema, Entry));
+    else
+      this->printEntryImpl(TheSema, rawToPrintableEnd(TheSema, Entry));
+    
     TraceOS->flush();
     if ( Entry.IsTemplateBegin )
       LastBeginEntry = Entry;
@@ -233,7 +244,10 @@ public:
   void printCachedEntries(const Sema &TheSema) {
     for(std::vector<RawTraceEntry>::iterator it = TraceEntries.begin();
         it != TraceEntries.end(); ++it) {
-      this->printEntryImpl(TheSema, rawToPrintable(TheSema, *it));
+      if ( it->IsTemplateBegin )
+        this->printEntryImpl(TheSema, rawToPrintableBegin(TheSema, *it));
+      else
+        this->printEntryImpl(TheSema, rawToPrintableEnd(TheSema, *it));
     }
     TraceEntries.clear();
   };
@@ -305,18 +319,28 @@ protected:
   void startTraceImpl(const Sema &) {
     Output.reset(new llvm::yaml::Output(*this->TraceOS));
     Output->beginDocuments();
-    Output->beginFlowSequence();
+    Output->beginSequence();
   };
   void endTraceImpl(const Sema &) {
-    Output->endFlowSequence();
+    Output->endSequence();
     Output->endDocuments();
   };
-  void printEntryImpl(const Sema &, const PrintableTraceEntry& Entry) {
+  
+  void printEntryImpl(const Sema &, const PrintableTraceEntryBegin& Entry) {
     void *SaveInfo;
-    if ( Output->preflightFlowElement(1, SaveInfo) ) {
-      llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntry&>(Entry), 
+    if ( Output->preflightElement(1, SaveInfo) ) {
+      llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryBegin&>(Entry), 
                           true);
-      Output->postflightFlowElement(SaveInfo);
+      Output->postflightElement(SaveInfo);
+    }
+  };
+
+  void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) {
+    void *SaveInfo;
+    if ( Output->preflightElement(1, SaveInfo) ) {
+      llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryEnd&>(Entry), 
+                          true);
+      Output->postflightElement(SaveInfo);
     }
   };
   
@@ -341,30 +365,32 @@ protected:
   void endTraceImpl(const Sema &) {
     (*this->TraceOS) << "</Trace>\n";
   };
-  void printEntryImpl(const Sema &, const PrintableTraceEntry& Entry) {
-    if (Entry.IsTemplateBegin) {
-      std::string EscapedName = escapeXml(Entry.Name);
-      (*this->TraceOS)
-        << llvm::format("<TemplateBegin>\n"
-          "    <Kind>%s</Kind>\n"
-          "    <Context context = \"%s\"/>\n"
-          "    <PointOfInstantiation>%s|%d|%d</PointOfInstantiation>\n",
-          Entry.InstantiationKind.c_str(), EscapedName.c_str(),
-          Entry.FileName.c_str(), Entry.Line, Entry.Column);
+  
+  void printEntryImpl(const Sema &, const PrintableTraceEntryBegin& Entry) {
+    std::string EscapedName = escapeXml(Entry.Name);
+    (*this->TraceOS) << llvm::format(
+      "<TemplateBegin>\n"
+      "    <Kind>%s</Kind>\n"
+      "    <Context context = \"%s\"/>\n"
+      "    <PointOfInstantiation>%s|%d|%d</PointOfInstantiation>\n",
+      Entry.InstantiationKind.c_str(), EscapedName.c_str(),
+      Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
-      (*this->TraceOS) << llvm::format("    <TimeStamp time = \"%f\"/>\n"
-        "    <MemoryUsage bytes = \"%d\"/>\n"
-        "</TemplateBegin>\n", Entry.TimeStamp, Entry.MemoryUsage);
-    } else {
-      (*this->TraceOS)
-        << llvm::format("<TemplateEnd>\n"
-          "    <Kind>%s</Kind>\n"
-          "    <TimeStamp time = \"%f\"/>\n"
-          "    <MemoryUsage bytes = \"%d\"/>\n"
-          "</TemplateEnd>\n", Entry.InstantiationKind.c_str(),
-          Entry.TimeStamp, Entry.MemoryUsage);
-    }
+    (*this->TraceOS) << llvm::format(
+      "    <TimeStamp time = \"%f\"/>\n"
+      "    <MemoryUsage bytes = \"%d\"/>\n"
+      "</TemplateBegin>\n", 
+      Entry.TimeStamp, Entry.MemoryUsage);
   };
+
+  void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) {
+    (*this->TraceOS) << llvm::format(
+      "<TemplateEnd>\n"
+      "    <TimeStamp time = \"%f\"/>\n"
+      "    <MemoryUsage bytes = \"%d\"/>\n"
+      "</TemplateEnd>\n", 
+      Entry.TimeStamp, Entry.MemoryUsage);
+  }
   
 public:
   
@@ -380,32 +406,29 @@ class TextPrinter : public TemplightTracer::TracePrinter {
 protected:
   void startTraceImpl(const Sema &) { };
   void endTraceImpl(const Sema &) { };
-  void printEntryImpl(const Sema &, const PrintableTraceEntry& Entry) { 
-    if (Entry.IsTemplateBegin) {
-      (*this->TraceOS)
-        << llvm::format(
-          "TemplateBegin\n"
-          "  Kind = %s\n"
-          "  Name = %s\n"
-          "  PointOfInstantiation = %s|%d|%d\n",
-          Entry.InstantiationKind.c_str(), Entry.Name.c_str(),
-          Entry.FileName.c_str(), Entry.Line, Entry.Column);
+  
+  void printEntryImpl(const Sema &, const PrintableTraceEntryBegin& Entry) { 
+    (*this->TraceOS) << llvm::format(
+      "TemplateBegin\n"
+      "  Kind = %s\n"
+      "  Name = %s\n"
+      "  PointOfInstantiation = %s|%d|%d\n",
+      Entry.InstantiationKind.c_str(), Entry.Name.c_str(),
+      Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
-      (*this->TraceOS) << llvm::format(
-        "  TimeStamp = %f\n"
-        "  MemoryUsage = %d\n"
-        , Entry.TimeStamp, Entry.MemoryUsage);
-    } else {
-      (*this->TraceOS)
-        << llvm::format(
-          "TemplateEnd\n"
-          "  Kind = %s\n"
-          "  TimeStamp = %f\n"
-          "  MemoryUsage = %d\n"
-          , Entry.InstantiationKind.c_str(),
-          Entry.TimeStamp, Entry.MemoryUsage);
-    }
+    (*this->TraceOS) << llvm::format(
+      "  TimeStamp = %f\n"
+      "  MemoryUsage = %d\n", 
+      Entry.TimeStamp, Entry.MemoryUsage);
   };
+
+  void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) { 
+    (*this->TraceOS) << llvm::format(
+      "TemplateEnd\n"
+      "  TimeStamp = %f\n"
+      "  MemoryUsage = %d\n",
+      Entry.TimeStamp, Entry.MemoryUsage);
+  }
   
 public:
   
