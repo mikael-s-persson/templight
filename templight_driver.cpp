@@ -463,22 +463,33 @@ int main(int argc_, const char **argv_) {
     return 1;
   }
   
+  std::set<std::string> SavedStrings;
+  StringSetSaver Saver(SavedStrings);
+  
+  // Determines whether we want nullptr markers in clang_argv to indicate response
+  // files end-of-lines. We only use this for the /LINK driver argument.
+  bool MarkEOLs = true;
+  if (argv.size() > 1 && StringRef(argv[1]).startswith("-cc1"))
+    MarkEOLs = false;
+  llvm::cl::ExpandResponseFiles(Saver, llvm::cl::TokenizeGNUCommandLine, argv,
+                                MarkEOLs);
+  
   // Separate out templight and clang flags.  templight flags are "-Xtemplight <templight_flag>"
   SmallVector<const char *, 256> templight_argv, clang_argv;
   templight_argv.push_back(argv[0]);
   clang_argv.push_back(argv[0]);
-  for (int i = 1, size = argv.size(); i < size; ++i) {
-    if (i < size - 1 && strcmp(argv[i], "-Xtemplight") == 0) {
-//       do {
-        templight_argv.push_back(argv[++i]);   // the word after -Xtemplight
-//       } while(i < size - 1 && argv[i+1][0] != '-');    // take first argument after -Xtemplight 
-                                                         // and all other words until next '-..' argument
+  for (int i = 1, size = argv.size(); i < size; /* in loop */ ) {
+    if ((argv[i] != nullptr) && 
+        (strcmp(argv[i], "-Xtemplight") == 0)) {
+      while( i < size - 1 && argv[++i] == nullptr ) /* skip EOLs */ ;
+      templight_argv.push_back(argv[i]);   // the word after -Xtemplight
+      while( i < size - 1 && argv[++i] == nullptr ) /* skip EOLs */ ;
     } else {
-      if (strcmp(argv[i], "-help") == 0) {
+      if ((argv[i] != nullptr) && (strcmp(argv[i], "-help") == 0)) {
         // Print the help for the templight options:
         PrintTemplightHelp();
       }
-      clang_argv.push_back(argv[i]);  // also leave -help to driver (to print its help info too)
+      clang_argv.push_back(argv[i++]);  // also leave -help to driver (to print its help info too)
     }
   }
   
@@ -486,17 +497,6 @@ int main(int argc_, const char **argv_) {
       templight_argv.size(), &templight_argv[0],
       "A tool to profile template instantiations in C++ code.\n");
   
-  std::set<std::string> SavedStrings;
-  StringSetSaver Saver(SavedStrings);
-
-  // Determines whether we want nullptr markers in clang_argv to indicate response
-  // files end-of-lines. We only use this for the /LINK driver argument.
-  bool MarkEOLs = true;
-  if (clang_argv.size() > 1 && StringRef(clang_argv[1]).startswith("-cc1"))
-    MarkEOLs = false;
-  llvm::cl::ExpandResponseFiles(Saver, llvm::cl::TokenizeGNUCommandLine, clang_argv,
-                                MarkEOLs);
-
   bool CanonicalPrefixes = true;
   for (int i = 1, size = clang_argv.size(); i < size; ++i) {
     // Skip end-of-line response file markers
