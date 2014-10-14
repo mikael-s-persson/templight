@@ -35,8 +35,29 @@ set_target_properties(templight PROPERTIES VERSION ${CLANG_EXECUTABLE_VERSION})
 
 add_dependencies(templight clang-headers)
 
+if(UNIX)
+  set(CLANGXX_LINK_OR_COPY create_symlink)
+# Create a relative symlink
+  set(templight_binary "templight${CMAKE_EXECUTABLE_SUFFIX}")
+else()
+  set(CLANGXX_LINK_OR_COPY copy)
+  set(templight_binary "${LLVM_RUNTIME_OUTPUT_INTDIR}/templight${CMAKE_EXECUTABLE_SUFFIX}")
+endif()
+
+# Create the templight-cl symlink in the build directory.
+set(templight_cl "${LLVM_RUNTIME_OUTPUT_INTDIR}/templight-cl${CMAKE_EXECUTABLE_SUFFIX}")
+add_custom_command(TARGET templight POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E ${CLANGXX_LINK_OR_COPY} "${templight_binary}" "${templight_cl}"
+    WORKING_DIRECTORY "${LLVM_RUNTIME_OUTPUT_INTDIR}")
+
+set_property(DIRECTORY APPEND
+  PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${templight_cl})
+
 install(TARGETS templight
   RUNTIME DESTINATION bin)
+
+# Create the templight-cl symlinks at installation time.
+install(SCRIPT templight_symlink.cmake -DCMAKE_INSTALL_PREFIX=\"${CMAKE_INSTALL_PREFIX}\")
 
 # Configure plist creation for OS X.
 set (TOOL_INFO_PLIST "Info.plist" CACHE STRING "Plist name")

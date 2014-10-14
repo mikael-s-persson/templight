@@ -45,10 +45,10 @@ Templight must be compiled from source, alongside the Clang source code.
 
 2. Clone the templight repository into the clang directories, as follows:
 ```bash
-(from top-level folder)
-$ cd llvm/tools/clang/tools
-$ mkdir templight
-$ git clone <link-to-clone-templight-github-repo> templight
+  (from top-level folder)
+  $ cd llvm/tools/clang/tools
+  $ mkdir templight
+  $ git clone <link-to-clone-templight-github-repo> templight
 ```
 
 3. Add the templight directory to the `CMakeLists.txt` file. 
@@ -58,18 +58,18 @@ $ git clone <link-to-clone-templight-github-repo> templight
 
 4. Apply the supplied patch to Clang's source code:
 ```bash
-(from top-level folder)
-$ cd llvm/tools/clang
-$ svn patch tools/templight/templight_clang_patch.diff
+  (from top-level folder)
+  $ cd llvm/tools/clang
+  $ svn patch tools/templight/templight_clang_patch.diff
 ```
 
 5. (Re-)Compile LLVM / Clang:
 ```bash
-(from top-level folder)
-$ mkdir build
-$ cd build
-$ cmake ../llvm/
-$ make
+  (from top-level folder)
+  $ mkdir build
+  $ cd build
+  $ cmake ../llvm/
+  $ make
 ```
 
 6. If successful, there should be `templight` executables in the `build/bin` folder.
@@ -81,19 +81,27 @@ Templight is designed to be a drop-in replacement for the clang compiler. This i
 Because of this particular situation, the options for templight must be specially marked with `-Xtemplight` to distinguish them from other Clang options. The general usage goes like this:
 
 ```bash
-$ templight [[-Xtemplight [templight-option]]|[clang-option]] <inputs>
+  $ templight [[-Xtemplight [templight-option]]|[clang-option]] <inputs>
+```
+
+Or, for the MSVC-compatible version of templight (analoguous to clang-cl) use as follows:
+
+```bash
+  $ templight-cl [[-Xtemplight [templight-option]]|[clang-option]] <inputs>
+(OR)
+  > templight-cl.exe [[-Xtemplight [templight-option]]|[clang-option]] <inputs>
 ```
 
 For example, if we have this simple command-line invocation of clang:
 
 ```bash
-$ clang++ -Wall -c some_source.cpp -o some_source.o
+  $ clang++ -Wall -c some_source.cpp -o some_source.o
 ```
 
 The corresponding templight profiler invocation, with options `-memory` and `-ignore-system` would look like this:
 
 ```bash
-$ templight -Xtemplight -profiler -Xtemplight -memory -Xtemplight -ignore-system -Wall -c some_source.cpp -o some_source.o
+  $ templight -Xtemplight -profiler -Xtemplight -memory -Xtemplight -ignore-system -Wall -c some_source.cpp -o some_source.o
 ```
 
 Note that the order in which the templight-options appear is not important, and that clang options can be interleaved with templight-options. However, **every single templight-option must be immediately preceeded with `-Xtemplight`**.
@@ -102,14 +110,14 @@ As can be seen from that simple example, one can easily substitude the clang com
 
 If you use CMake and clang with the following common trick:
 ```bash
-$ export CC=/path/to/llvm/build/bin/clang
-$ export CXX=/path/to/llvm/build/bin/clang++
-$ cmake <path-to-project-root>
+  $ export CC=/path/to/llvm/build/bin/clang
+  $ export CXX=/path/to/llvm/build/bin/clang++
+  $ cmake <path-to-project-root>
 ```
 Then, templight could be swapped in by the same trick:
 ```bash
-$ export CXX="/path/to/llvm/build/bin/templight -Xtemplight -profiler -Xtemplight -memory"
-$ cmake <path-to-project-root>
+  $ export CXX="/path/to/llvm/build/bin/templight -Xtemplight -profiler -Xtemplight -memory"
+  $ cmake <path-to-project-root>
 ```
 But be warned that the **cmake scripts will not recognize this compiler**, and therefore, you will have to make changes in the CMake files to be able to handle it. If anyone is interested in creating some CMake modules to deal with templight, please contact the maintainer, such modules would be more than welcomed.
 
@@ -119,7 +127,7 @@ The templight profiler is invoked by specifying the templight-option `-profiler`
 
 For example, running the following:
 ```bash
-$ templight -Xtemplight -profiler -c some_source.cpp
+  $ templight -Xtemplight -profiler -c some_source.cpp
 ```
 will produce a file called `some_source.cpp.trace.yaml` in the same directory as `some_source.cpp`.
 
@@ -177,11 +185,9 @@ This command is similar to `lookup` except that instead of showing you the locat
 
 ## Inspecting the profiles
 
-Currently, there is no up-to-date or actively maintained application to view or inspect the profiles.
-
 Any contribution or work towards such an application is more than welcomed! The formats of the traces being text-based and using fairly standard markup languages will hopefully facilitate the development of such applications.
 
-The [Templar application](https://github.com/schulmar/Templar) was one such early attempt at writing such an application.
+The [Templar application](https://github.com/schulmar/Templar) was one application that allows the user to open and inspect the traces produced by Templight.
 
 ## Credits
 
