@@ -377,7 +377,7 @@ protected:
       Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
     (*this->TraceOS) << llvm::format(
-      "    <TimeStamp time = \"%f\"/>\n"
+      "    <TimeStamp time = \"%.9f\"/>\n"
       "    <MemoryUsage bytes = \"%d\"/>\n"
       "</TemplateBegin>\n", 
       Entry.TimeStamp, Entry.MemoryUsage);
@@ -386,7 +386,7 @@ protected:
   void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) {
     (*this->TraceOS) << llvm::format(
       "<TemplateEnd>\n"
-      "    <TimeStamp time = \"%f\"/>\n"
+      "    <TimeStamp time = \"%.9f\"/>\n"
       "    <MemoryUsage bytes = \"%d\"/>\n"
       "</TemplateEnd>\n", 
       Entry.TimeStamp, Entry.MemoryUsage);
@@ -417,7 +417,7 @@ protected:
       Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
     (*this->TraceOS) << llvm::format(
-      "  TimeStamp = %f\n"
+      "  TimeStamp = %.9f\n"
       "  MemoryUsage = %d\n", 
       Entry.TimeStamp, Entry.MemoryUsage);
   };
@@ -425,7 +425,7 @@ protected:
   void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) { 
     (*this->TraceOS) << llvm::format(
       "TemplateEnd\n"
-      "  TimeStamp = %f\n"
+      "  TimeStamp = %.9f\n"
       "  MemoryUsage = %d\n",
       Entry.TimeStamp, Entry.MemoryUsage);
   }
@@ -451,14 +451,15 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
     return;
   
   RawTraceEntry Entry;
-
-  llvm::TimeRecord timeRecord = llvm::TimeRecord::getCurrentTime();
-
+  
+  // NOTE: Use this function because it produces time since start of process.
+  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_wall_time();
+  
   Entry.IsTemplateBegin = true;
   Entry.InstantiationKind = Inst.Kind;
   Entry.Entity = Inst.Entity;
   Entry.PointOfInstantiation = Inst.PointOfInstantiation;
-  Entry.TimeStamp = timeRecord.getWallTime();
+  Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
   
   if ( SafeModeFlag ) {
@@ -477,12 +478,13 @@ void TemplightTracer::atTemplateEndImpl(const Sema &TheSema,
   
   RawTraceEntry Entry;
 
-  llvm::TimeRecord timeRecord = llvm::TimeRecord::getCurrentTime();
+  // NOTE: Use this function because it produces time since start of process.
+  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_wall_time();
 
   Entry.IsTemplateBegin = false;
   Entry.InstantiationKind = Inst.Kind;
   Entry.Entity = Inst.Entity;
-  Entry.TimeStamp = timeRecord.getWallTime();
+  Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
 
   if ( SafeModeFlag ) {
