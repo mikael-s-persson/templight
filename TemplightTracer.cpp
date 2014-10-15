@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <cstdint>
 
 namespace clang {
 
@@ -34,7 +35,7 @@ struct RawTraceEntry {
   Decl *Entity;
   SourceLocation PointOfInstantiation;
   double TimeStamp;
-  size_t MemoryUsage;
+  std::uint64_t MemoryUsage;
   
   RawTraceEntry() : IsTemplateBegin(true), 
     InstantiationKind(ActiveTemplateInstantiation::TemplateInstantiation),
@@ -48,12 +49,12 @@ struct PrintableTraceEntryBegin {
   int Line;
   int Column;
   double TimeStamp;
-  size_t MemoryUsage;
+  std::uint64_t MemoryUsage;
 };
 
 struct PrintableTraceEntryEnd {
   double TimeStamp;
-  size_t MemoryUsage;
+  std::uint64_t MemoryUsage;
 };
 
 
