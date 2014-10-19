@@ -54,6 +54,9 @@ public:
   bool getMemoryFlag() const { return MemoryFlag; };
   bool getSafeModeFlag() const { return SafeModeFlag; };
   
+  void setBlacklists(const std::string& ContextPattern, 
+                     const std::string& IdentifierPattern);
+  
 };
 
 

@@ -2,6 +2,20 @@
 
 Templight is a Clang-based tool to profile the time and memory consumption of template instantiations and to perform interactive debugging sessions to gain introspection into the template instantiation process.
 
+## Table of Contents
+
+- [Templight Profiler](#templight-profiler)
+- [Templight Debugger](#templight-debugger)
+- [Getting Started](#getting-started)
+ - [Getting and Compiling Templight](#getting-and-compiling-templight)
+ - [Invoking Templight](#invoking-templight)
+- [Using the Templight Profiler](#using-the-templight-profiler)
+ - [Default Output Location](#default-output-location)
+- [Using the Templight Debugger](#using-the-templight-debugger)
+- [Using Blacklists](#using-blacklists)
+- [Inspecting the profiles](#inspecting-the-profiles)
+- [Credits](#credits)
+
 ## Templight Profiler
 
 The templight profiler is intended to be used as a drop-in substitute for the clang compiler (or one of its variants, like clang-cl) and it performs a full compilation, *honoring all the clang compiler options*, but records a trace (or history) of the template instantiations performed by the compiler for each translation unit.
@@ -20,8 +34,9 @@ The profiler is enabled by the templight option `-profiler`, and it supports the
  - `-memory` - Profile the memory usage during template instantiations.
  - `-safe-mode` - Output Templight traces without buffering, not to lose them at failure (note: this will distort the timing profiles due to file I/O latency).
  - `-ignore-system` - Ignore any template instantiation located in system-includes (-isystem), such as from the STL.
- - `-output=<string>` - Write Templight profiling traces to <file>. By default, it outputs to "current_source.cpp.trace.<format-extension>" or "current_source.cpp.memory.trace.<format-extension>" (if `-memory` is used).
+ - `-output=<file>` - Write Templight profiling traces to <file>. By default, it outputs to "current_source.cpp.trace.<format-extension>" or "current_source.cpp.memory.trace.<format-extension>" (if `-memory` is used).
  - `-format=<string>` - Specify the format of Templight outputs (yaml/xml/text, default is yaml).
+ - `-blacklist=<file>` - Specify a blacklist file that lists declaration contexts (e.g., namespaces) and identifiers (e.g., `std::basic_string`) as regular expressions to be filtered out of the trace (not appear in the profiler trace files). Every line of the blacklist file should contain either "context" or "identifier", followed by a single space character and then, a valid regular expression.
 
 ## Templight Debugger
 
@@ -32,6 +47,7 @@ In short, the templight debugger is to template meta-programming what GDB is to 
 The debugger is enabled by the templight option `-debugger`, and it supports the following additional templight options:
 
  - `-ignore-system` - Ignore any template instantiation located in system-includes (-isystem), such as from the STL.
+ - `-blacklist=<file>` - Specify a blacklist file that lists declaration contexts (e.g., namespaces) and identifiers (e.g., `std::basic_string`) as regular expressions to be ignored by the debugger. Every line of the blacklist file should contain either "context" or "identifier", followed by a single space character and then, a valid regular expression.
 
 **NOTE**: Both the debugger and the profiler **can be used together**. Obviously, if compilation is constantly interrupted by the interactive debugger, the time traces recorded by the profiler will be meaningless. Nevertheless, running the profiler during debugging will have the benefit of recording the history of the template instantiations, for later review, and can also record, with reasonably accuracy, the memory consumption profiles.
 
@@ -121,7 +137,7 @@ Then, templight could be swapped in by the same trick:
 ```
 But be warned that the **cmake scripts will not recognize this compiler**, and therefore, you will have to make changes in the CMake files to be able to handle it. If anyone is interested in creating some CMake modules to deal with templight, please contact the maintainer, such modules would be more than welcomed.
 
-### Invoking the Templight Profiler
+## Using the Templight Profiler
 
 The templight profiler is invoked by specifying the templight-option `-profiler`. By default, if no other templight-option is specified, the templight profiler will output only time profiling data, will use the "yaml" format, and will output to one file per input source file and will append the extension `.trace.yaml` to that file.
 
@@ -135,7 +151,23 @@ It is, in general, highly recommended to use the `-ignore-system` option for the
 
 *Warning*: Trace files produced by the profiler can be very large, especially in template-heavy code. So, use this tool with caution. It is not recommended to blindly generate templight trace files for all the source files of a particular project (e.g., using templight profiler in place of clang in a CMake build tree). You should first identify specific parts of your project that you suspect (or know) lead to template instantiation problems (e.g., compile-time performance issues, or actual bugs or failures), and then create a small source file that exercises those specific parts and produce a templight trace for that source file.
 
-### Using the Templight Debugger
+### Default Output Location
+
+The location and names of the output files for the templight traces needs some explanation, because it might not always be straight-forward. The main problem here is that templight is meant to be used as a drop-in replacement for the compiler (and it actually compiles the code, exactly as the vanilla Clang compiler does it). The problem is that you can invoke a compiler in many different ways. On typical small tests, you would simply invoke the compiler on a single source file and produce either an executable or an object file. In other case, you might invoke it with a list of source files to produce either an executable or a library. And for "real" projects, a build system will generally invoke the compiler for each source file, producing an object file each time, and later invoking the linker separately.
+
+Templight must find a reasonable place to output its traces in all those cases, and often, specifying an output location with `-output` does not really solve the problem (like this problem: multiple source files, one output location?). The only really straight-forward case is with the `-stdout` option, where the traces are simply printed out to the standard output.
+
+**One Source File, One Object File** (without `-output` option): Whenever doing a simple compilation where each source file is turned into a single object file (i.e., when using the `-c` option), then the templight tracer will, by default, output the traces into files located where the output object files are put and with the same name, but with the addition of the templight extensions. In other words, for compilation instructions like `-c some/path/first_source.cpp some/other/path/second_source.cpp`, you would get traces files: `some/path/first_source.o.trace.yaml` and `some/other/path/second_source.o.trace.yaml`. Whichever options you specify to change the location or name of the generate object file, templight traces will follow. In other words, the default trace filenames are derived from the final output object-file names.
+
+**One Source File, One Object File** (with `-output` option): Because the `-output` option cannot deal with multiple files specified, templight will ignore this option in this case. 
+
+**One Source File, (Some Output) File**: If you do any other operation that is like a simple compilation (no linking), such as using the `-S` option to general assembly listings, then the situation is analoguous to when you use the `-c` option (produce object-files). The templight trace file names are simply derived from whatever is the final output file name (e.g., `some_source.s.trace.yaml`). If you invoke templight in a way that does not involve any kind of an output file, then templight falls back to deriving the trace file names from the source file names (e.g., `some_source.cpp.trace.yaml`).
+
+The overall behavior in the above three cases is designed such that when templight is invoked as part of a compilation driven by a build-system (e.g., cmake, make, etc.), which is often done out-of-source, it will output all its traces wherever the build-system stashes the object-files, which is a safe and clean place to put them (e.g., avoid pollution in source tree, avoid possible file-permission problems (read-only source tree), etc..). It is also easy, through most build-systems to create scripts that will move or copy those traces out of those locations (that might be temporary under some setups) and put them wherever is more convenient.
+
+**Many Source Files, (Some Output) File**: If you invoke the compilation of several source files to be linked into a single executable or library, then templight will merge all the traces into a single output file, whose name is derived from the executable or library name. If no output name is specified, the compiler puts the executable into `a.out`, and templight will put its traces into `a.trace.yaml`. If you specify an output file via the `-output` option, then the trace will be put into that file.
+
+## Using the Templight Debugger
 
 The templight debugger is invoked by specifying the templight-option `-debugger`. When the debugger is launched, it will interrupt the compilation with a console command prompt, just like GDB. The templight debugger is designed to work in a similar fashion as GDB, with many of the same familiar commands and behavior.
 
@@ -182,6 +214,32 @@ This command is similar to `lookup` except that instead of showing you the locat
 
 *Warning*: The templight debugger is still in a *very experimental* phase. You should expect that some of the behaviors mentioned in the above descriptions of the commands will not work as advertized, yet. If you observe any unusual or buggy behaviors, please notify the maintainer and provide an example source file with the sequence of commands that led to the observed behavior.
 
+## Using Blacklists
+
+A blacklist file can be passed to templight (profiler or debugger) to filter entries such that they do not appear in the trace files or do not get involved in the step-through debugging. The blacklist files are simple text files where each line contains either `context <regex>` or `identifier <regex>` where `<regex>` is some regular expression statement that is used to match to the entries. Comments in the blacklist files are preceeded with a `#` character.
+
+The "context" regular expressions will be matched against declaration contexts of the entry being tested. For example, with `context std`, all elements of the std namespace will be filtered out (but note that some elements of std might refer to elements in other implementation-specific namespaces, such as `__gnu_cxx` for libstdc++ from GNU / GCC). Context blacklist elements can also be used to filter out nested instantiations. For example, using `context std::basic_string` would filter out the instantiation of the member functions and the nested templates of the `std::basic_string` class template, but not the instantiation of the class itself. In other words, declaration contexts are not only namespaces, but could also be classes (for members) and functions (for local declarations).
+
+The "identifier" regular expressions will be matched against the fully-scoped entry names themselves. For example, using `identifier std::basic_string` would filter out any instantiation of the `std::basic_string` class template.
+
+*Warning*: Beware of lexical clashes, because the regular expressions could blacklist things that you don't expect. For instance, using `context std` would filter out things in a `lastday` namespace too! It is therefore recommended to make the regular expressions as narrow as possible and use them wisely. For example, we could solve the example problem with `context ^std(::|$)` (match only context names starting with "std" and either ending there or being followed immediately by "::"). Also, an often practical and safer alternative to blacklists is to use the `-ignore-system` option, which ignores all entries coming out of a system-include header (standard headers and anything in directories specified with `-isystem` compiler option), which is not as fine-grained but is often more effective against complex libraries (e.g., STL, Boost, etc.) which can cause a lot of "noise" in the traces.
+
+Note that a pretty well-established convention for template-heavy code is to place implementation details into either `detail` namespace or in an anonymous namespace. Boost library implementers are particularly good with this. Therefore, it can be a good idea to filter out those things if you are not interested in seeing instantiations of such implementation details.
+
+Here is an example blacklist file that uses some of the examples mentioned above:
+```bash
+    # Filter out anything coming from the std namespace:
+    context ^std(::|$)
+    
+    # Filter out things from libstdc++'s internal namespace:
+    context __gnu_cxx
+    
+    # Filter out anonymous entries (unnamed namespaces or types):
+    identifier anonymous
+    
+    # Filter out boost::something::or::nothing::detail namespace elements:
+    context ^boost::.*detail
+```
 
 ## Inspecting the profiles
 

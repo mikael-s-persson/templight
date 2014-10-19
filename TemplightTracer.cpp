@@ -18,6 +18,7 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/Regex.h"
 #include "llvm/Support/YAMLTraits.h"
 
 #include <string>
@@ -207,14 +208,62 @@ namespace clang {
 
 class TemplightTracer::TracePrinter {
 protected:
-  virtual void startTraceImpl(const Sema &) = 0;
-  virtual void endTraceImpl(const Sema &) = 0;
-  virtual void printEntryImpl(const Sema &, const PrintableTraceEntryBegin &) = 0;
-  virtual void printEntryImpl(const Sema &, const PrintableTraceEntryEnd &) = 0;
+  virtual void startTraceImpl() = 0;
+  virtual void endTraceImpl() = 0;
+  virtual void printEntryImpl(const PrintableTraceEntryBegin &) = 0;
+  virtual void printEntryImpl(const PrintableTraceEntryEnd &) = 0;
   
 public:
   
-  bool shouldIgnoreEntry(const RawTraceEntry &Entry) const {
+  void skipEntry(const RawTraceEntry &Entry) {
+    if ( CurrentSkippedEntry.IsTemplateBegin )
+      return; // Already skipping entries.
+    if ( !Entry.IsTemplateBegin )
+      return; // Cannot skip entry that has ended already.
+    CurrentSkippedEntry = Entry;
+  };
+  
+  bool shouldIgnoreEntry(const RawTraceEntry &Entry) {
+    
+    // Check the black-lists:
+    // (1) Is currently ignoring entries?
+    if ( CurrentSkippedEntry.IsTemplateBegin ) {
+      // Should skip the entry, but need to check if it's the last entry to skip:
+      if ( !Entry.IsTemplateBegin
+           && ( CurrentSkippedEntry.InstantiationKind == Entry.InstantiationKind )
+           && ( CurrentSkippedEntry.Entity == Entry.Entity ) ) {
+        CurrentSkippedEntry.IsTemplateBegin = false;
+      }
+      return true;
+    }
+    // (2) Context:
+    if ( CoRegex ) {
+      if ( NamedDecl* p_context = dyn_cast_or_null<NamedDecl>(Entry.Entity->getDeclContext()) ) {
+        std::string co_name;
+        llvm::raw_string_ostream OS(co_name);
+        p_context->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+        OS.str(); // flush to string.
+        if ( CoRegex->match(co_name) ) {
+          skipEntry(Entry);
+          return true;
+        }
+      }
+    }
+    // (3) Identifier:
+    if ( IdRegex ) {
+      if ( NamedDecl* p_ndecl = dyn_cast_or_null<NamedDecl>(Entry.Entity) ) {
+        std::string id_name;
+        llvm::raw_string_ostream OS(id_name);
+        p_ndecl->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+        OS.str(); // flush to string.
+        if ( IdRegex->match(id_name) ) {
+          skipEntry(Entry);
+          return true;
+        }
+      }
+    }
+    
+    // Avoid some duplication of memoization entries:
     if ( Entry.InstantiationKind == ActiveTemplateInstantiation::Memoization ) {
       if ( !LastBeginEntry.IsTemplateBegin
            && ( LastBeginEntry.InstantiationKind == Entry.InstantiationKind )
@@ -222,17 +271,18 @@ public:
         return true;
       }
     }
+    
     return false;
   };
   
-  void printRawEntry(const Sema &TheSema, const RawTraceEntry &Entry) {
+  void printRawEntry(const RawTraceEntry &Entry) {
     if ( shouldIgnoreEntry(Entry) )
       return;
 
     if ( Entry.IsTemplateBegin )
-      this->printEntryImpl(TheSema, rawToPrintableBegin(TheSema, Entry));
+      this->printEntryImpl(rawToPrintableBegin(TheSema, Entry));
     else
-      this->printEntryImpl(TheSema, rawToPrintableEnd(TheSema, Entry));
+      this->printEntryImpl(rawToPrintableEnd(TheSema, Entry));
     
     TraceOS->flush();
     if ( Entry.IsTemplateBegin )
@@ -242,18 +292,18 @@ public:
       LastBeginEntry.IsTemplateBegin = false;
   };
   
-  void printCachedEntries(const Sema &TheSema) {
+  void printCachedEntries() {
     for(std::vector<RawTraceEntry>::iterator it = TraceEntries.begin();
         it != TraceEntries.end(); ++it) {
       if ( it->IsTemplateBegin )
-        this->printEntryImpl(TheSema, rawToPrintableBegin(TheSema, *it));
+        this->printEntryImpl(rawToPrintableBegin(TheSema, *it));
       else
-        this->printEntryImpl(TheSema, rawToPrintableEnd(TheSema, *it));
+        this->printEntryImpl(rawToPrintableEnd(TheSema, *it));
     }
     TraceEntries.clear();
   };
   
-  void cacheEntry(const Sema &TheSema, const RawTraceEntry &Entry) {
+  void cacheEntry(const RawTraceEntry &Entry) {
     if ( shouldIgnoreEntry(Entry) )
       return;
     TraceEntries.push_back(Entry);
@@ -265,20 +315,21 @@ public:
     if ( !Entry.IsTemplateBegin &&
          ( Entry.InstantiationKind == TraceEntries.front().InstantiationKind ) &&
          ( Entry.Entity == TraceEntries.front().Entity ) )
-      printCachedEntries(TheSema);
+      printCachedEntries();
   };
   
-  void startTrace(const Sema &TheSema) {
-    this->startTraceImpl(TheSema);
+  void startTrace() {
+    this->startTraceImpl();
   };
   
-  void endTrace(const Sema &TheSema) {
-    printCachedEntries(TheSema);
-    this->endTraceImpl(TheSema);
+  void endTrace() {
+    printCachedEntries();
+    this->endTraceImpl();
     TraceOS->flush();
   };
   
-  TracePrinter(const std::string &Output) : TraceOS(0) {
+  TracePrinter(const Sema &aSema, const std::string &Output) : TheSema(aSema), TraceOS(0) {
+    CurrentSkippedEntry.IsTemplateBegin = false;
     if ( Output == "stdout" ) {
       TraceOS = &llvm::outs();
     } else {
@@ -302,8 +353,14 @@ public:
     }
   };
   
+  const Sema &TheSema;
+  
   std::vector<RawTraceEntry> TraceEntries;
   RawTraceEntry LastBeginEntry;
+  
+  RawTraceEntry CurrentSkippedEntry;
+  std::unique_ptr<llvm::Regex> CoRegex;
+  std::unique_ptr<llvm::Regex> IdRegex;
   
   llvm::raw_ostream* TraceOS;
   
@@ -317,17 +374,17 @@ namespace {
 
 class YamlPrinter : public TemplightTracer::TracePrinter {
 protected:
-  void startTraceImpl(const Sema &) {
+  void startTraceImpl() {
     Output.reset(new llvm::yaml::Output(*this->TraceOS));
     Output->beginDocuments();
     Output->beginSequence();
   };
-  void endTraceImpl(const Sema &) {
+  void endTraceImpl() {
     Output->endSequence();
     Output->endDocuments();
   };
   
-  void printEntryImpl(const Sema &, const PrintableTraceEntryBegin& Entry) {
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) {
     void *SaveInfo;
     if ( Output->preflightElement(1, SaveInfo) ) {
       llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryBegin&>(Entry), 
@@ -336,7 +393,7 @@ protected:
     }
   };
 
-  void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) {
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) {
     void *SaveInfo;
     if ( Output->preflightElement(1, SaveInfo) ) {
       llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryEnd&>(Entry), 
@@ -347,8 +404,8 @@ protected:
   
 public:
   
-  YamlPrinter(const std::string &Output) : 
-              TemplightTracer::TracePrinter(Output) { };
+  YamlPrinter(const Sema &aSema, const std::string &Output) : 
+              TemplightTracer::TracePrinter(aSema, Output) { };
   
 private:
   std::unique_ptr<llvm::yaml::Output> Output;
@@ -358,16 +415,16 @@ private:
 
 class XmlPrinter : public TemplightTracer::TracePrinter {
 protected:
-  void startTraceImpl(const Sema &) {
+  void startTraceImpl() {
     (*this->TraceOS) <<
       "<?xml version=\"1.0\" standalone=\"yes\"?>\n"
       "<Trace>\n";
   };
-  void endTraceImpl(const Sema &) {
+  void endTraceImpl() {
     (*this->TraceOS) << "</Trace>\n";
   };
   
-  void printEntryImpl(const Sema &, const PrintableTraceEntryBegin& Entry) {
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) {
     std::string EscapedName = escapeXml(Entry.Name);
     (*this->TraceOS) << llvm::format(
       "<TemplateBegin>\n"
@@ -384,7 +441,7 @@ protected:
       Entry.TimeStamp, Entry.MemoryUsage);
   };
 
-  void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) {
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) {
     (*this->TraceOS) << llvm::format(
       "<TemplateEnd>\n"
       "    <TimeStamp time = \"%.9f\"/>\n"
@@ -395,8 +452,8 @@ protected:
   
 public:
   
-  XmlPrinter(const std::string &Output) : 
-             TemplightTracer::TracePrinter(Output) { };
+  XmlPrinter(const Sema &aSema, const std::string &Output) : 
+             TemplightTracer::TracePrinter(aSema, Output) { };
   
 };
 
@@ -405,10 +462,10 @@ public:
 
 class TextPrinter : public TemplightTracer::TracePrinter {
 protected:
-  void startTraceImpl(const Sema &) { };
-  void endTraceImpl(const Sema &) { };
+  void startTraceImpl() { };
+  void endTraceImpl() { };
   
-  void printEntryImpl(const Sema &, const PrintableTraceEntryBegin& Entry) { 
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) { 
     (*this->TraceOS) << llvm::format(
       "TemplateBegin\n"
       "  Kind = %s\n"
@@ -423,7 +480,7 @@ protected:
       Entry.TimeStamp, Entry.MemoryUsage);
   };
 
-  void printEntryImpl(const Sema &, const PrintableTraceEntryEnd& Entry) { 
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) { 
     (*this->TraceOS) << llvm::format(
       "TemplateEnd\n"
       "  TimeStamp = %.9f\n"
@@ -433,8 +490,8 @@ protected:
   
 public:
   
-  TextPrinter(const std::string &Output) : 
-              TemplightTracer::TracePrinter(Output) { };
+  TextPrinter(const Sema &aSema, const std::string &Output) : 
+              TemplightTracer::TracePrinter(aSema, Output) { };
   
 };
 
@@ -464,9 +521,9 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
   
   if ( SafeModeFlag ) {
-    TemplateTracePrinter->printRawEntry(TheSema, Entry);
+    TemplateTracePrinter->printRawEntry(Entry);
   } else {
-    TemplateTracePrinter->cacheEntry(TheSema, Entry);
+    TemplateTracePrinter->cacheEntry(Entry);
   }
 }
 
@@ -489,9 +546,9 @@ void TemplightTracer::atTemplateEndImpl(const Sema &TheSema,
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
 
   if ( SafeModeFlag ) {
-    TemplateTracePrinter->printRawEntry(TheSema, Entry);
+    TemplateTracePrinter->printRawEntry(Entry);
   } else {
-    TemplateTracePrinter->cacheEntry(TheSema, Entry);
+    TemplateTracePrinter->cacheEntry(Entry);
   }
 }
 
@@ -505,36 +562,20 @@ TemplightTracer::TemplightTracer(const Sema &TheSema,
                                  SafeModeFlag(Safemode),
                                  IgnoreSystemFlag(IgnoreSystem)  {
   
-  std::string postfix;
-  if ( Output.empty() ) {
-    // then, derive output name from the input name:
-    FileID fileID = TheSema.getSourceManager().getMainFileID();
-    postfix = (MemoryFlag ? ".memory.trace." : ".trace.");
-    
-    Output =
-      TheSema.getSourceManager().getFileEntryForID(fileID)->getName();
-  }
-  
   if ( ( Format.empty() ) || ( Format == "yaml" ) ) {
-    TemplateTracePrinter.reset(new YamlPrinter(
-      ( postfix == "" ? Output : (Output + postfix + "yaml") )
-    ));
+    TemplateTracePrinter.reset(new YamlPrinter(TheSema, Output));
     return;
   }
   else if ( Format == "xml" ) {
-    TemplateTracePrinter.reset(new XmlPrinter(
-      ( postfix == "" ? Output : (Output + postfix + "xml") )
-    ));
+    TemplateTracePrinter.reset(new XmlPrinter(TheSema, Output));
     return;
   }
   else if ( Format == "text" ) {
-    TemplateTracePrinter.reset(new TextPrinter(
-      ( postfix == "" ? Output : (Output + postfix + "txt") )
-    ));
+    TemplateTracePrinter.reset(new TextPrinter(TheSema, Output));
     return;
   }
   else {
-    llvm::errs() << "Error: [Templight] Unrecoginized template trace format:" << Format;
+    llvm::errs() << "Error: [Templight-Tracer] Unrecognized template trace format:" << Format;
   }
   
   if ( !TemplateTracePrinter || !TemplateTracePrinter->isValid() ) {
@@ -551,14 +592,22 @@ TemplightTracer::~TemplightTracer() {
 }
 
 
-void TemplightTracer::initializeImpl(const Sema &TheSema) {
+void TemplightTracer::initializeImpl(const Sema &) {
   if ( TemplateTracePrinter )
-    TemplateTracePrinter->startTrace(TheSema);
+    TemplateTracePrinter->startTrace();
 }
 
-void TemplightTracer::finalizeImpl(const Sema &TheSema) {
+void TemplightTracer::finalizeImpl(const Sema &) {
   if ( TemplateTracePrinter )
-    TemplateTracePrinter->endTrace(TheSema);
+    TemplateTracePrinter->endTrace();
+}
+
+void TemplightTracer::setBlacklists(const std::string& ContextPattern, 
+                                    const std::string& IdentifierPattern) {
+  if ( TemplateTracePrinter ) {
+    TemplateTracePrinter->CoRegex.reset(new llvm::Regex(ContextPattern));
+    TemplateTracePrinter->IdRegex.reset(new llvm::Regex(IdentifierPattern));
+  }
 }
 
 

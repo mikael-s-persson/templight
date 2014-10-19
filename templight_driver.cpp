@@ -101,9 +101,16 @@ static cl::opt<std::string> OutputFilename("output",
   cl::desc("Write Templight profiling traces to <file>."),
   cl::cat(ClangTemplightCategory));
 
+static std::string LocalOutputFilename;
+static SmallVector<std::string, 32> TempOutputFiles;
+
 static cl::opt<std::string> OutputFormat("format",
   cl::desc("Specify the format of Templight outputs (yaml/xml/text, default is yaml)."),
   cl::init("yaml"), cl::cat(ClangTemplightCategory));
+
+static cl::opt<std::string> BlackListFilename("blacklist",
+  cl::desc("Use regex expressions in <file> to filter out undesirable traces."),
+  cl::cat(ClangTemplightCategory));
 
 
 static cl::Option* TemplightOptions[] = {
@@ -114,7 +121,8 @@ static cl::Option* TemplightOptions[] = {
     &InstProfiler,
     &InteractiveDebug,
     &OutputFilename,
-    &OutputFormat };
+    &OutputFormat,
+    &BlackListFilename };
 
 void PrintTemplightHelp() {
   // Compute the maximum argument length...
@@ -371,8 +379,12 @@ int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   Act->IgnoreSystemInst = IgnoreSystemInst;
   Act->InstProfiler = InstProfiler;
   Act->InteractiveDebug = InteractiveDebug;
-  Act->OutputFilename = OutputFilename;
   Act->OutputFormat = OutputFormat;
+  Act->BlackListFilename = BlackListFilename;
+  
+  Act->OutputFilename = TemplightAction::CreateOutputFilename(
+    Clang, LocalOutputFilename, OutputFormat, 
+    InstProfiler, OutputToStdOut, MemoryProfile);
   
   // Executing the templight action...
   bool Success = Clang->ExecuteAction(*Act);
@@ -433,6 +445,17 @@ void ExecuteTemplightJobs(Driver &TheDriver, DiagnosticsEngine &Diags,
     if (!Clang->hasDiagnostics()) {
       FailingCommands.push_back(std::make_pair(1, command));
       return;
+    }
+    
+    LocalOutputFilename = ""; // Let the filename be created from options or output file name.
+    std::string TemplightOutFile = TemplightAction::CreateOutputFilename(
+      Clang.get(), "", OutputFormat, InstProfiler, OutputToStdOut, MemoryProfile);
+    // Check if templight filename is in a temporary path:
+    llvm::SmallString<128> TDir;
+    llvm::sys::path::system_temp_directory(true, TDir);
+    if ( TDir.equals(llvm::sys::path::parent_path(llvm::StringRef(TemplightOutFile))) ) {
+      C.addTempFile(TemplightOutFile.c_str());
+      TempOutputFiles.push_back(TemplightOutFile);
     }
     
     // Execute the frontend actions.
@@ -567,6 +590,8 @@ int main(int argc_, const char **argv_) {
       goto cleanup;
     }
     
+    LocalOutputFilename = OutputFilename;
+    
     // Execute the frontend actions.
     Res = ExecuteTemplightInvocation(Clang.get());
 
@@ -595,6 +620,35 @@ int main(int argc_, const char **argv_) {
     
     SmallVector<std::pair<int, const Command *>, 4> FailingCommands;
     ExecuteTemplightJobs(TheDriver, Diags, *C, C->getJobs(), clang_argv[0], FailingCommands);
+    
+    // Merge all the temp files into a single output file:
+    if ( ! TempOutputFiles.empty() ) {
+      if ( OutputFilename.empty() ) 
+        OutputFilename = "a";
+      std::string FinalOutputFilename = TemplightAction::CreateOutputFilename(
+        nullptr, OutputFilename, OutputFormat, 
+        InstProfiler, OutputToStdOut, MemoryProfile);
+      if ( ( !FinalOutputFilename.empty() ) && ( FinalOutputFilename != "stdout" ) ) {
+        std::error_code error;
+        llvm::raw_fd_ostream TraceOS(FinalOutputFilename, error, llvm::sys::fs::F_None);
+        if ( error ) {
+          llvm::errs() <<
+            "Error: [Templight] Can not open file to write trace of template instantiations: "
+            << FinalOutputFilename << " Error: " << error.message();
+        } else {
+          for ( SmallVector< std::string, 32 >::iterator it = TempOutputFiles.begin(), 
+                it_end = TempOutputFiles.end(); it != it_end; ++it) {
+            llvm::ErrorOr< std::unique_ptr<llvm::MemoryBuffer> >
+              file_epbuf = llvm::MemoryBuffer::getFile(llvm::Twine(*it));
+            if(file_epbuf && file_epbuf.get()) {
+              TraceOS << StringRef(file_epbuf.get()->getBufferStart(), 
+                file_epbuf.get()->getBufferEnd() - file_epbuf.get()->getBufferStart()) 
+                << '\n';
+            }
+          }
+        }
+      }
+    }
     
     // Remove temp files.
     C->CleanupFileList(C->getTempFiles());

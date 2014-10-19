@@ -36,6 +36,14 @@ public:
   bool hasASTFileSupport() const override;
   bool hasIRSupport() const override;
   bool hasCodeCompletionSupport() const override;
+  
+  static std::string CreateOutputFilename(
+    CompilerInstance *CI,
+    const std::string& OptOutputName, 
+    const std::string& OptOutputFormat,
+    bool OptInstProfiler,
+    bool OptOutputToStdOut, 
+    bool OptMemoryProfile);
 
   bool OutputToStdOut;
   bool MemoryProfile;
@@ -45,6 +53,7 @@ public:
   bool InteractiveDebug;
   std::string OutputFilename;
   std::string OutputFormat;
+  std::string BlackListFilename;
 };
 
 }

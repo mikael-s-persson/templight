@@ -18,6 +18,7 @@
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/Regex.h"
 
 #include <string>
 #include <vector>
@@ -416,7 +417,16 @@ public:
       << " (Memory usage: " << Entry.MemoryUsage << ")\n";
   };
   
-  bool shouldIgnoreEntry(const TemplateDebuggerEntry &Entry) const {
+  void skipEntry(const TemplateDebuggerEntry &Entry) {
+    if ( CurrentSkippedEntry.IsTemplateBegin )
+      return; // Already skipping entries.
+    if ( !Entry.IsTemplateBegin )
+      return; // Cannot skip entry that has ended already.
+    CurrentSkippedEntry = Entry;
+  };
+  
+  bool shouldIgnoreEntry(const TemplateDebuggerEntry &Entry) {
+    // Check if it's been commanded to ignore things:
     if ( ignoreAll )
       return true;
     if ( ignoreUntilBreakpoint ) {
@@ -435,6 +445,46 @@ public:
       else
         return true;
     }
+    
+    // Check the black-lists:
+    // (1) Is currently ignoring entries?
+    if ( CurrentSkippedEntry.IsTemplateBegin ) {
+      // Should skip the entry, but need to check if it's the last entry to skip:
+      if ( !Entry.IsTemplateBegin
+           && ( CurrentSkippedEntry.Inst.Kind == Entry.Inst.Kind )
+           && ( CurrentSkippedEntry.Inst.Entity == Entry.Inst.Entity ) ) {
+        CurrentSkippedEntry.IsTemplateBegin = false;
+      }
+      return true;
+    }
+    // (2) Context:
+    if ( CoRegex ) {
+      if ( NamedDecl* p_context = dyn_cast_or_null<NamedDecl>(Entry.Inst.Entity->getDeclContext()) ) {
+        std::string co_name;
+        llvm::raw_string_ostream OS(co_name);
+        p_context->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+        OS.str(); // flush to string.
+        if ( CoRegex->match(co_name) ) {
+          skipEntry(Entry);
+          return true;
+        }
+      }
+    }
+    // (3) Identifier:
+    if ( IdRegex ) {
+      if ( NamedDecl* p_ndecl = dyn_cast_or_null<NamedDecl>(Entry.Inst.Entity) ) {
+        std::string id_name;
+        llvm::raw_string_ostream OS(id_name);
+        p_ndecl->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+        OS.str(); // flush to string.
+        if ( IdRegex->match(id_name) ) {
+          skipEntry(Entry);
+          return true;
+        }
+      }
+    }
+    
+    // Avoid some duplication of memoization entries:
     if ( Entry.Inst.Kind == ActiveTemplateInstantiation::Memoization ) {
       if ( !LastBeginEntry.IsTemplateBegin
            && ( LastBeginEntry.Inst.Kind == Entry.Inst.Kind )
@@ -670,7 +720,9 @@ public:
   };
   
   InteractiveAgent(const Sema &aTheSema) : TheSema(aTheSema), ignoreAll(false), 
-    ignoreUntilLastEnds(false), ignoreUntilBreakpoint(false) { };
+    ignoreUntilLastEnds(false), ignoreUntilBreakpoint(false) {
+    CurrentSkippedEntry.IsTemplateBegin = false;
+  };
   
   ~InteractiveAgent() { };
   
@@ -682,6 +734,10 @@ public:
   std::vector< std::string > Breakpoints;
   
   std::string LastUserCommand;
+  
+  TemplateDebuggerEntry CurrentSkippedEntry;
+  std::unique_ptr<llvm::Regex> CoRegex;
+  std::unique_ptr<llvm::Regex> IdRegex;
   
   unsigned ignoreAll : 1;
   unsigned ignoreUntilLastEnds : 1;
@@ -736,6 +792,14 @@ TemplightDebugger::TemplightDebugger(const Sema &TheSema,
 
 TemplightDebugger::~TemplightDebugger() { 
   // must be defined here due to TracePrinter being incomplete in header.
+}
+
+void TemplightDebugger::setBlacklists(const std::string& ContextPattern, 
+                                      const std::string& IdentifierPattern) {
+  if ( Interactor ) {
+    Interactor->CoRegex.reset(new llvm::Regex(ContextPattern));
+    Interactor->IdRegex.reset(new llvm::Regex(IdentifierPattern));
+  }
 }
 
 } // namespace clang
