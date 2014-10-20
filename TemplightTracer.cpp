@@ -431,7 +431,7 @@ protected:
       "<TemplateBegin>\n"
       "    <Kind>%s</Kind>\n"
       "    <Context context = \"%s\"/>\n"
-      "    <Location>%s|%d|%d</PointOfInstantiation>\n",
+      "    <Location>%s|%d|%d</Location>\n",
       Entry.InstantiationKind.c_str(), EscapedName.c_str(),
       Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
