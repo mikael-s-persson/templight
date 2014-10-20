@@ -181,9 +181,10 @@ struct MappingTraits<clang::PrintableTraceEntryBegin> {
     io.mapRequired("IsBegin", b);
     io.mapRequired("Kind", Entry.InstantiationKind);
     io.mapOptional("Name", Entry.Name);
-    io.mapOptional("FileName", Entry.FileName);
-    io.mapOptional("Line", Entry.Line);
-    io.mapOptional("Column", Entry.Column);
+    std::string loc = Entry.FileName + "|" + 
+                      std::to_string(Entry.Line) + "|" + 
+                      std::to_string(Entry.Column);
+    io.mapOptional("Location", loc);
     io.mapRequired("TimeStamp", Entry.TimeStamp);
     io.mapOptional("MemoryUsage", Entry.MemoryUsage);
   }
@@ -275,7 +276,7 @@ public:
     return false;
   };
   
-  void printRawEntry(const RawTraceEntry &Entry) {
+  virtual void printRawEntry(const RawTraceEntry &Entry) {
     if ( shouldIgnoreEntry(Entry) )
       return;
 
@@ -292,7 +293,7 @@ public:
       LastBeginEntry.IsTemplateBegin = false;
   };
   
-  void printCachedEntries() {
+  virtual void printCachedEntries() {
     for(std::vector<RawTraceEntry>::iterator it = TraceEntries.begin();
         it != TraceEntries.end(); ++it) {
       if ( it->IsTemplateBegin )
@@ -303,7 +304,7 @@ public:
     TraceEntries.clear();
   };
   
-  void cacheEntry(const RawTraceEntry &Entry) {
+  virtual void cacheEntry(const RawTraceEntry &Entry) {
     if ( shouldIgnoreEntry(Entry) )
       return;
     TraceEntries.push_back(Entry);
@@ -374,17 +375,17 @@ namespace {
 
 class YamlPrinter : public TemplightTracer::TracePrinter {
 protected:
-  void startTraceImpl() {
+  void startTraceImpl() override {
     Output.reset(new llvm::yaml::Output(*this->TraceOS));
     Output->beginDocuments();
     Output->beginSequence();
   };
-  void endTraceImpl() {
+  void endTraceImpl() override {
     Output->endSequence();
     Output->endDocuments();
   };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) {
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override {
     void *SaveInfo;
     if ( Output->preflightElement(1, SaveInfo) ) {
       llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryBegin&>(Entry), 
@@ -393,7 +394,7 @@ protected:
     }
   };
 
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) {
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override {
     void *SaveInfo;
     if ( Output->preflightElement(1, SaveInfo) ) {
       llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryEnd&>(Entry), 
@@ -415,22 +416,22 @@ private:
 
 class XmlPrinter : public TemplightTracer::TracePrinter {
 protected:
-  void startTraceImpl() {
+  void startTraceImpl() override {
     (*this->TraceOS) <<
       "<?xml version=\"1.0\" standalone=\"yes\"?>\n"
       "<Trace>\n";
   };
-  void endTraceImpl() {
+  void endTraceImpl() override {
     (*this->TraceOS) << "</Trace>\n";
   };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) {
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override {
     std::string EscapedName = escapeXml(Entry.Name);
     (*this->TraceOS) << llvm::format(
       "<TemplateBegin>\n"
       "    <Kind>%s</Kind>\n"
       "    <Context context = \"%s\"/>\n"
-      "    <PointOfInstantiation>%s|%d|%d</PointOfInstantiation>\n",
+      "    <Location>%s|%d|%d</PointOfInstantiation>\n",
       Entry.InstantiationKind.c_str(), EscapedName.c_str(),
       Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
@@ -441,7 +442,7 @@ protected:
       Entry.TimeStamp, Entry.MemoryUsage);
   };
 
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) {
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override {
     (*this->TraceOS) << llvm::format(
       "<TemplateEnd>\n"
       "    <TimeStamp time = \"%.9f\"/>\n"
@@ -458,19 +459,288 @@ public:
 };
 
 
+struct EntryTraverseTask {
+  typedef std::vector<RawTraceEntry>::const_iterator Iter;
+  Iter it_begin, it_end;
+  int nd_id;
+  int parent_id;
+  EntryTraverseTask(Iter aItBegin, Iter aItEnd, int aNdId, int aParentId) : 
+    it_begin(aItBegin), it_end(aItEnd), nd_id(aNdId), parent_id(aParentId) { };
+  
+  static std::vector<EntryTraverseTask> recordDFSEntryTree(
+      const std::vector<RawTraceEntry>& TraceEntries,
+      int& last_node_id) {
+    
+    Iter it     = TraceEntries.begin();
+    Iter it_end = TraceEntries.end();
+    
+    int start_id = last_node_id;
+    int cur_top = 0;
+    std::vector<EntryTraverseTask> parent_stack;
+    parent_stack.push_back(EntryTraverseTask(it, it_end, last_node_id++, -1));
+    while ( ++it != it_end ) {
+      if ( it->IsTemplateBegin ) {
+        parent_stack.push_back(EntryTraverseTask(
+          it, it_end, last_node_id++, parent_stack[cur_top].nd_id));
+        cur_top = parent_stack.size()-1;
+      } else {
+        parent_stack[cur_top].it_end = it;
+        cur_top = parent_stack[cur_top].parent_id - start_id;
+      }
+    }
+    
+    return parent_stack;
+  };
+};
+
+
+
+class NestedXMLPrinter : public TemplightTracer::TracePrinter {
+protected:
+  void startTraceImpl() override {
+    (*this->TraceOS) <<
+      "<?xml version=\"1.0\" standalone=\"yes\"?>\n"
+      "<Trace>\n";
+  };
+  void endTraceImpl() override {
+    (*this->TraceOS) << "</Trace>\n";
+  };
+  
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override { };
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override { };
+  
+  int last_node_id;
+  int last_edge_id;
+  
+  void printNodeEntryImpl(const EntryTraverseTask& Task) {
+    PrintableTraceEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
+    PrintableTraceEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
+    std::string EscapedName = escapeXml(BegEntry.Name);
+    
+    (*this->TraceOS) << llvm::format(
+      "<Entry Kind=\"%s\" Name=\"%s\" ",
+      BegEntry.InstantiationKind.c_str(), EscapedName.c_str());
+    (*this->TraceOS) << llvm::format(
+      "Location=\"%s|%d|%d\" ", 
+      BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
+    (*this->TraceOS) << llvm::format(
+      "Time=\"%.9f\" Memory=\"%d\">\n", 
+      EndEntry.TimeStamp - BegEntry.TimeStamp,
+      EndEntry.MemoryUsage - BegEntry.MemoryUsage);
+    
+    // Print only first part (heading).
+  };
+  
+public:
+  
+  
+  void printRawEntry(const RawTraceEntry &Entry) override {
+    cacheEntry(Entry);  // no immediate / safe mode supported for GraphML output.
+  };
+  
+  void printCachedEntries() override {
+    if ( TraceEntries.empty() )
+      return;
+    
+    std::vector<EntryTraverseTask> parent_stack = 
+      EntryTraverseTask::recordDFSEntryTree(TraceEntries, last_node_id);
+    
+    typedef std::vector<EntryTraverseTask>::iterator Iter;
+    std::vector<Iter> sit_open;
+    for(Iter sit = parent_stack.begin(),
+        sit_end = parent_stack.end(); sit != sit_end; ++sit ) {
+      while ( !sit_open.empty() && (sit->it_begin > sit_open.back()->it_end) ) {
+        (*this->TraceOS) << "</Entry>\n";
+        sit_open.pop_back();
+      }
+      printNodeEntryImpl(*sit);
+      sit_open.push_back(parent_stack.begin());
+    }
+    while ( !sit_open.empty() ) {
+      (*this->TraceOS) << "</Entry>\n";
+      sit_open.pop_back();
+    }
+    TraceEntries.clear();
+  };
+  
+  NestedXMLPrinter(const Sema &aSema, const std::string &Output) : 
+                   TemplightTracer::TracePrinter(aSema, Output), 
+                   last_node_id(0) { };
+  
+};
+
+
+
+
+class GraphMLPrinter : public TemplightTracer::TracePrinter {
+protected:
+  void startTraceImpl() override {
+    (*this->TraceOS) <<
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+      "<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\""
+      " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
+      " xsi:schemaLocation=\"http://graphml.graphdrawing.org/xmlns"
+      " http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd\">\n";
+    (*this->TraceOS) <<
+      "<key id=\"d0\" for=\"node\" attr.name=\"Kind\" attr.type=\"string\"/>\n"
+      "<key id=\"d1\" for=\"node\" attr.name=\"Name\" attr.type=\"string\"/>\n"
+      "<key id=\"d2\" for=\"node\" attr.name=\"Location\" attr.type=\"string\"/>\n"
+      "<key id=\"d3\" for=\"node\" attr.name=\"Time\" attr.type=\"double\">\n"
+        "<default>0.0</default>\n"
+      "</key>\n"
+      "<key id=\"d4\" for=\"node\" attr.name=\"Memory\" attr.type=\"long\">\n"
+        "<default>0</default>\n"
+      "</key>\n";
+    (*this->TraceOS) << "<graph>\n";
+  };
+  void endTraceImpl() override {
+    (*this->TraceOS) << "</graph>\n</graphml>\n";
+  };
+  
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override { };
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override { };
+  
+  int last_node_id;
+  int last_edge_id;
+  
+  void printNodeEntryImpl(const EntryTraverseTask& Task) {
+    PrintableTraceEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
+    PrintableTraceEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
+    
+    (*this->TraceOS) << llvm::format("<node id=\"n%d\">\n", Task.nd_id);
+    
+    std::string EscapedName = escapeXml(BegEntry.Name);
+    (*this->TraceOS) << llvm::format(
+      "  <data key=\"d0\">%s</data>\n"
+      "  <data key=\"d1\">\"%s\"</data>\n"
+      "  <data key=\"d2\">\"%s|%d|%d\"</data>\n",
+      BegEntry.InstantiationKind.c_str(), EscapedName.c_str(),
+      BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
+    (*this->TraceOS) << llvm::format(
+      "  <data key=\"d3\">%.9f</data>\n"
+      "  <data key=\"d4\">%d</data>\n", 
+      EndEntry.TimeStamp - BegEntry.TimeStamp,
+      EndEntry.MemoryUsage - BegEntry.MemoryUsage);
+    
+    (*this->TraceOS) << "</node>\n";
+    if ( Task.parent_id < 0 )
+      return;
+    (*this->TraceOS) << llvm::format(
+      "<edge id=\"e%d\" source=\"n%d\" target=\"n%d\"/>\n",
+      last_edge_id++, Task.parent_id, Task.nd_id);
+  };
+  
+public:
+  
+  
+  void printRawEntry(const RawTraceEntry &Entry) override {
+    cacheEntry(Entry);  // no immediate / safe mode supported for GraphML output.
+  };
+  
+  void printCachedEntries() override {
+    if ( TraceEntries.empty() )
+      return;
+    
+    std::vector<EntryTraverseTask> parent_stack = 
+      EntryTraverseTask::recordDFSEntryTree(TraceEntries, last_node_id);
+    
+    for(std::vector<EntryTraverseTask>::iterator sit = parent_stack.begin(),
+        sit_end = parent_stack.end(); sit != sit_end; ++sit ) {
+      printNodeEntryImpl(*sit);
+    }
+    TraceEntries.clear();
+  };
+  
+  GraphMLPrinter(const Sema &aSema, const std::string &Output) : 
+                 TemplightTracer::TracePrinter(aSema, Output), 
+                 last_node_id(0), last_edge_id(0) { };
+  
+};
+
+
+
+
+class GraphVizPrinter : public TemplightTracer::TracePrinter {
+protected:
+  void startTraceImpl() override {
+    (*this->TraceOS) << "digraph Templight {\n";
+  };
+  void endTraceImpl() override {
+    (*this->TraceOS) << "}\n";
+  };
+  
+  void printEntryImpl(const PrintableTraceEntryBegin&) override {};
+  void printEntryImpl(const PrintableTraceEntryEnd&) override {};
+  
+  int last_node_id;
+  
+  void printNodeEntryImpl(const EntryTraverseTask& Task) {
+    
+    PrintableTraceEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
+    PrintableTraceEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
+    std::string EscapedName = escapeXml(BegEntry.Name);
+    (*this->TraceOS) 
+      << llvm::format("n%d [label = ", Task.nd_id)
+      << llvm::format(
+          "\"%s\\n"
+          "%s\\n"
+          "At %s Line %d Column %d\\n",
+        BegEntry.InstantiationKind.c_str(), EscapedName.c_str(),
+        BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column)
+      << llvm::format(
+          "Time: %.9f seconds Memory: %d bytes\" ];\n",
+        EndEntry.TimeStamp - BegEntry.TimeStamp,
+        EndEntry.MemoryUsage - BegEntry.MemoryUsage);
+    
+    if ( Task.parent_id < 0 )
+      return;
+    
+    (*this->TraceOS) << llvm::format(
+      "n%d -> n%d;\n",
+      Task.parent_id, Task.nd_id);
+  };
+  
+public:
+  
+  
+  void printRawEntry(const RawTraceEntry &Entry) override {
+    cacheEntry(Entry);  // no immediate / safe mode supported for GraphML output.
+  };
+  
+  void printCachedEntries() override {
+    if ( TraceEntries.empty() )
+      return;
+    
+    std::vector<EntryTraverseTask> parent_stack = 
+      EntryTraverseTask::recordDFSEntryTree(TraceEntries, last_node_id);
+    
+    for(std::vector<EntryTraverseTask>::iterator sit = parent_stack.begin(),
+        sit_end = parent_stack.end(); sit != sit_end; ++sit ) {
+      printNodeEntryImpl(*sit);
+    }
+    TraceEntries.clear();
+  };
+  
+  GraphVizPrinter(const Sema &aSema, const std::string &Output) : 
+                  TemplightTracer::TracePrinter(aSema, Output), 
+                  last_node_id(0) { };
+  
+};
+
+
 
 
 class TextPrinter : public TemplightTracer::TracePrinter {
 protected:
-  void startTraceImpl() { };
-  void endTraceImpl() { };
+  void startTraceImpl() override { };
+  void endTraceImpl() override { };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) { 
+  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override { 
     (*this->TraceOS) << llvm::format(
       "TemplateBegin\n"
       "  Kind = %s\n"
       "  Name = %s\n"
-      "  PointOfInstantiation = %s|%d|%d\n",
+      "  Location = %s|%d|%d\n",
       Entry.InstantiationKind.c_str(), Entry.Name.c_str(),
       Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
@@ -480,7 +750,7 @@ protected:
       Entry.TimeStamp, Entry.MemoryUsage);
   };
 
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) { 
+  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override { 
     (*this->TraceOS) << llvm::format(
       "TemplateEnd\n"
       "  TimeStamp = %.9f\n"
@@ -572,6 +842,18 @@ TemplightTracer::TemplightTracer(const Sema &TheSema,
   }
   else if ( Format == "text" ) {
     TemplateTracePrinter.reset(new TextPrinter(TheSema, Output));
+    return;
+  }
+  else if ( Format == "graphml" ) {
+    TemplateTracePrinter.reset(new GraphMLPrinter(TheSema, Output));
+    return;
+  }
+  else if ( Format == "graphviz" ) {
+    TemplateTracePrinter.reset(new GraphVizPrinter(TheSema, Output));
+    return;
+  }
+  else if ( Format == "nestedxml" ) {
+    TemplateTracePrinter.reset(new NestedXMLPrinter(TheSema, Output));
     return;
   }
   else {
