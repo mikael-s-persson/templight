@@ -1,12 +1,9 @@
-
 message TemplightHeader {
-  required uint32 version = 0;
-  optional string source_file = 1;
+  required uint32 version = 1;
+  optional string source_file = 2;
 }
 
 message TemplightEntry {
-  required bool is_begin = 0;
-  
   enum InstantiationKind {
     TemplateInstantiation = 0;
     DefaultTemplateArgumentInstantiation = 1;
@@ -18,22 +15,34 @@ message TemplightEntry {
     ExceptionSpecInstantiation = 7;
     Memoization = 8;
   }
-  optional InstantiationKind kind = 1;
-  optional string name = 2;
   
   message SourceLocation {
-    required string file_name = 0;
-    required uint32 line = 1;
-    optional uint32 column = 2;
+    required string file_name = 1;
+    required uint32 line = 2;
+    optional uint32 column = 3;
   }
-  optional SourceLocation location = 3;
   
-  optional double time_stamp = 4;
-  optional uint64 memory_usage = 5;
+  message Begin {
+    required InstantiationKind kind = 1;
+    required string name = 2;
+    required SourceLocation location = 3;
+    optional double time_stamp = 4;
+    optional uint32 memory_usage = 5;
+  }
+  
+  message End {
+    optional double time_stamp = 1;
+    optional uint32 memory_usage = 2;
+  }
+  
+  oneof begin_or_end {
+    Begin begin = 1;
+    End end = 2;
+  }
 }
 
 
 message TemplightTrace {
-  required TemplightHeader header = 0;
-  repeated TemplightEntry entries = 1;
+  required TemplightHeader header = 1;
+  repeated TemplightEntry entries = 2;
 }
