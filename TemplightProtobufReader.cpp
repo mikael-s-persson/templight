@@ -63,7 +63,7 @@ static void loadLocation(llvm::StringRef aSubBuffer,
       case llvm::protobuf::getVarIntWire<3>::value:
         Line = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
-      case llvm::protobuf::getVarIntWire<3>::value:
+      case llvm::protobuf::getVarIntWire<4>::value:
         Column = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
       default:
