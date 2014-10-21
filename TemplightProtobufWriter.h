@@ -11,7 +11,6 @@
 #define LLVM_CLANG_TEMPLIGHT_PROTOBUF_WRITER_H
 
 #include <string>
-#include <cstdint>
 
 namespace llvm {
   class raw_ostream;
@@ -32,7 +31,6 @@ private:
 public:
   
   TemplightProtobufWriter();
-  ~TemplightProtobufWriter();
   
   void initialize(const std::string& aSourceName = "");
   std::string& finalize();
