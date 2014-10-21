@@ -42,10 +42,12 @@ void TemplightProtobufReader::loadHeader(llvm::StringRef aSubBuffer) {
   LastChunk = TemplightProtobufReader::Header;
 }
 
-static void loadLocation(llvm::StringRef aSubBuffer,
+static void loadLocation(llvm::StringRef aSubBuffer, 
+                         std::vector<std::string>& fileNameMap,
                          std::string& FileName, int& Line, int& Column) {
   // Set default values:
   FileName = "";
+  std::size_t FileID = std::numeric_limits<std::size_t>::max();
   Line = 0;
   Column = 0;
   
@@ -56,9 +58,12 @@ static void loadLocation(llvm::StringRef aSubBuffer,
         FileName = llvm::protobuf::loadString(aSubBuffer);
         break;
       case LLVM_PROTOBUF_VARINT_WIRE(2):
-        Line = llvm::protobuf::loadVarInt(aSubBuffer);
+        FileID = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
       case LLVM_PROTOBUF_VARINT_WIRE(3):
+        Line = llvm::protobuf::loadVarInt(aSubBuffer);
+        break;
+      case LLVM_PROTOBUF_VARINT_WIRE(4):
         Column = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
       default:
@@ -66,6 +71,16 @@ static void loadLocation(llvm::StringRef aSubBuffer,
         break;
     }
   }
+  
+  if ( FileID != std::numeric_limits<std::size_t>::max() ) {
+    if ( fileNameMap.size() <= FileID )
+      fileNameMap.resize(FileID + 1);
+    if ( !FileName.empty() ) {
+      fileNameMap[FileID] = FileName;  // overwrite existing names, if any, but there shouldn't be.
+    } else {
+      FileName = fileNameMap[FileID];
+    }
+  } // else we don't care?
   
 }
 
@@ -87,7 +102,7 @@ void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
         break;
       case LLVM_PROTOBUF_STRING_WIRE(3): {
         std::uint64_t cur_size = llvm::protobuf::loadVarInt(aSubBuffer);
-        loadLocation(aSubBuffer.slice(0, cur_size), 
+        loadLocation(aSubBuffer.slice(0, cur_size), fileNameMap, 
           LastBeginEntry.FileName, LastBeginEntry.Line, LastBeginEntry.Column);
         aSubBuffer = aSubBuffer.drop_front(cur_size);
         break;
@@ -133,6 +148,7 @@ void TemplightProtobufReader::loadEndEntry(llvm::StringRef aSubBuffer) {
 TemplightProtobufReader::LastChunkType 
     TemplightProtobufReader::startOnBuffer(llvm::StringRef aBuffer) {
   buffer = aBuffer;
+  fileNameMap.clear();
   unsigned int cur_wire = llvm::protobuf::loadVarInt(buffer);
   if ( cur_wire != LLVM_PROTOBUF_STRING_WIRE(1) ) {
     buffer = llvm::StringRef();

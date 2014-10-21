@@ -57,22 +57,36 @@ void TemplightProtobufWriter::dumpOnStream(llvm::raw_ostream& OS) {
 //   OS.write(buffer.data(), buffer.size()); // if not within repeated sequence of traces
 }
 
-static std::string printEntryLocation(const std::string& FileName, int Line, int Column) {
+static std::string printEntryLocation(
+    std::unordered_map< std::string, std::size_t >& fileNameMap, 
+    const std::string& FileName, int Line, int Column) {
   
   /*
   message SourceLocation {
-    required string file_name = 1;
-    required uint32 line = 2;
-    optional uint32 column = 3;
+    optional string file_name = 1;
+    required uint32 file_id = 2;
+    required uint32 line = 3;
+    optional uint32 column = 4;
   }
   */
   
   std::string location_contents;
   llvm::raw_string_ostream OS_inner(location_contents);
-    
-  llvm::protobuf::saveString(OS_inner, 1, FileName); // file_name
-  llvm::protobuf::saveVarInt(OS_inner, 2, Line);     // line
-  llvm::protobuf::saveVarInt(OS_inner, 3, Column);   // column
+  
+  std::unordered_map< std::string, std::size_t >::iterator 
+    it = fileNameMap.find(FileName);
+  
+  if ( it == fileNameMap.end() ) {
+    llvm::protobuf::saveString(OS_inner, 1, FileName); // file_name
+    std::size_t file_id = fileNameMap.size();
+    llvm::protobuf::saveVarInt(OS_inner, 2, file_id);     // file_id
+    fileNameMap[FileName] = file_id;
+  } else {
+    llvm::protobuf::saveVarInt(OS_inner, 2, it->second);     // file_id
+  }
+  
+  llvm::protobuf::saveVarInt(OS_inner, 3, Line);     // line
+  llvm::protobuf::saveVarInt(OS_inner, 4, Column);   // column
   
   OS_inner.str();
   
@@ -98,7 +112,7 @@ void TemplightProtobufWriter::printEntry(const PrintableTemplightEntryBegin& aEn
     llvm::protobuf::saveVarInt(OS_inner, 1, aEntry.InstantiationKind); // kind
     llvm::protobuf::saveString(OS_inner, 2, aEntry.Name);              // name
     llvm::protobuf::saveString(OS_inner, 3, 
-                         printEntryLocation(aEntry.FileName, 
+                         printEntryLocation(fileNameMap, aEntry.FileName, 
                                             aEntry.Line, aEntry.Column)); // location
     llvm::protobuf::saveDouble(OS_inner, 4, aEntry.TimeStamp);         // time_stamp
     if ( aEntry.MemoryUsage > 0 )

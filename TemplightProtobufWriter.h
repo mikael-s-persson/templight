@@ -11,6 +11,7 @@
 #define LLVM_CLANG_TEMPLIGHT_PROTOBUF_WRITER_H
 
 #include <string>
+#include <unordered_map>
 
 namespace llvm {
   class raw_ostream;
@@ -27,6 +28,7 @@ class TemplightProtobufWriter {
 private:
   
   std::string buffer;
+  std::unordered_map< std::string, std::size_t > fileNameMap;
   
 public:
   

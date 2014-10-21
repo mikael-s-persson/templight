@@ -17,9 +17,10 @@ message TemplightEntry {
   }
   
   message SourceLocation {
-    required string file_name = 1;
-    required uint32 line = 2;
-    optional uint32 column = 3;
+    optional string file_name = 1;
+    required uint32 file_id = 2;
+    required uint32 line = 3;
+    optional uint32 column = 4;
   }
   
   message Begin {

@@ -15,6 +15,7 @@
 #include <llvm/ADT/StringRef.h>
 
 #include <string>
+#include <vector>
 
 namespace clang {
 
@@ -24,6 +25,8 @@ private:
   
   llvm::StringRef buffer;
   llvm::StringRef remainder_buffer;
+  
+  std::vector< std::string > fileNameMap;
   
   void loadHeader(llvm::StringRef aSubBuffer);
   void loadBeginEntry(llvm::StringRef aSubBuffer);
