@@ -27,22 +27,27 @@ message TemplightEntry {
     required string name = 2;
     required SourceLocation location = 3;
     optional double time_stamp = 4;
-    optional uint32 memory_usage = 5;
+    optional uint64 memory_usage = 5;
   }
   
   message End {
     optional double time_stamp = 1;
-    optional uint32 memory_usage = 2;
+    optional uint64 memory_usage = 2;
   }
   
-  oneof begin_or_end {
-    Begin begin = 1;
-    End end = 2;
-  }
+//   oneof begin_or_end {
+//     Begin begin = 1;
+//     End end = 2;
+//   }
+  optional Begin begin = 1;
+  optional End end = 2;
 }
-
 
 message TemplightTrace {
   required TemplightHeader header = 1;
   repeated TemplightEntry entries = 2;
+}
+
+message TemplightTraceCollection {
+  repeated TemplightTrace traces = 1;
 }

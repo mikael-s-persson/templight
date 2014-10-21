@@ -128,6 +128,9 @@ std::string TemplightAction::CreateOutputFilename(
     else if ( OptOutputFormat == "nestedxml" ) {
       result += "xml";
     }
+    else if ( OptOutputFormat == "protobuf" ) {
+      result += "pbf";
+    }
     else {
       llvm::errs() << "Error: [Templight-Action] Unrecognized template trace format:" 
                    << OptOutputFormat << "\n";

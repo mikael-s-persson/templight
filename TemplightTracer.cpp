@@ -9,6 +9,9 @@
 
 #include "TemplightTracer.h"
 
+#include "TemplightProtobufWriter.h"
+#include "PrintableTemplightEntries.h"
+
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Sema/ActiveTemplateInst.h"
@@ -43,22 +46,6 @@ struct RawTraceEntry {
     Entity(0), TimeStamp(0.0), MemoryUsage(0) { };
 };
 
-struct PrintableTraceEntryBegin {
-  std::string InstantiationKind;
-  std::string Name;
-  std::string FileName;
-  int Line;
-  int Column;
-  double TimeStamp;
-  std::uint64_t MemoryUsage;
-};
-
-struct PrintableTraceEntryEnd {
-  double TimeStamp;
-  std::uint64_t MemoryUsage;
-};
-
-
 const char* const InstantiationKindStrings[] = { 
   "TemplateInstantiation",
   "DefaultTemplateArgumentInstantiation",
@@ -71,10 +58,10 @@ const char* const InstantiationKindStrings[] = {
   "Memoization" };
 
 
-PrintableTraceEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawTraceEntry& Entry) {
-  PrintableTraceEntryBegin Ret;
+PrintableTemplightEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawTraceEntry& Entry) {
+  PrintableTemplightEntryBegin Ret;
   
-  Ret.InstantiationKind = InstantiationKindStrings[Entry.InstantiationKind];
+  Ret.InstantiationKind = Entry.InstantiationKind;
   
   NamedDecl *NamedTemplate = dyn_cast_or_null<NamedDecl>(Entry.Entity);
   if (NamedTemplate) {
@@ -99,9 +86,10 @@ PrintableTraceEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawTrace
   return Ret;
 }
 
-PrintableTraceEntryEnd rawToPrintableEnd(const Sema &TheSema, const RawTraceEntry& Entry) {
+PrintableTemplightEntryEnd rawToPrintableEnd(const Sema &TheSema, const RawTraceEntry& Entry) {
   return {Entry.TimeStamp, Entry.MemoryUsage};
 }
+
 
 
 std::string escapeXml(const std::string& Input) {
@@ -175,11 +163,13 @@ struct ScalarEnumerationTraits<
 };
 
 template <>
-struct MappingTraits<clang::PrintableTraceEntryBegin> {
-  static void mapping(IO &io, clang::PrintableTraceEntryBegin &Entry) {
+struct MappingTraits<clang::PrintableTemplightEntryBegin> {
+  static void mapping(IO &io, clang::PrintableTemplightEntryBegin &Entry) {
     bool b = true;
     io.mapRequired("IsBegin", b);
-    io.mapRequired("Kind", Entry.InstantiationKind);
+    // must be converted to string before, due to some BS with yaml traits.
+    std::string kind = clang::InstantiationKindStrings[Entry.InstantiationKind];
+    io.mapRequired("Kind", kind);
     io.mapOptional("Name", Entry.Name);
     std::string loc = Entry.FileName + "|" + 
                       std::to_string(Entry.Line) + "|" + 
@@ -191,8 +181,8 @@ struct MappingTraits<clang::PrintableTraceEntryBegin> {
 };
 
 template <>
-struct MappingTraits<clang::PrintableTraceEntryEnd> {
-  static void mapping(IO &io, clang::PrintableTraceEntryEnd &Entry) {
+struct MappingTraits<clang::PrintableTemplightEntryEnd> {
+  static void mapping(IO &io, clang::PrintableTemplightEntryEnd &Entry) {
     bool b = false;
     io.mapRequired("IsBegin", b);
     io.mapRequired("TimeStamp", Entry.TimeStamp);
@@ -211,8 +201,8 @@ class TemplightTracer::TracePrinter {
 protected:
   virtual void startTraceImpl() = 0;
   virtual void endTraceImpl() = 0;
-  virtual void printEntryImpl(const PrintableTraceEntryBegin &) = 0;
-  virtual void printEntryImpl(const PrintableTraceEntryEnd &) = 0;
+  virtual void printEntryImpl(const PrintableTemplightEntryBegin &) = 0;
+  virtual void printEntryImpl(const PrintableTemplightEntryEnd &) = 0;
   
 public:
   
@@ -385,19 +375,19 @@ protected:
     Output->endDocuments();
   };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override {
+  void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override {
     void *SaveInfo;
     if ( Output->preflightElement(1, SaveInfo) ) {
-      llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryBegin&>(Entry), 
+      llvm::yaml::yamlize(*Output, const_cast<PrintableTemplightEntryBegin&>(Entry), 
                           true);
       Output->postflightElement(SaveInfo);
     }
   };
 
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override {
+  void printEntryImpl(const PrintableTemplightEntryEnd& Entry) override {
     void *SaveInfo;
     if ( Output->preflightElement(1, SaveInfo) ) {
-      llvm::yaml::yamlize(*Output, const_cast<PrintableTraceEntryEnd&>(Entry), 
+      llvm::yaml::yamlize(*Output, const_cast<PrintableTemplightEntryEnd&>(Entry), 
                           true);
       Output->postflightElement(SaveInfo);
     }
@@ -425,14 +415,14 @@ protected:
     (*this->TraceOS) << "</Trace>\n";
   };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override {
+  void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override {
     std::string EscapedName = escapeXml(Entry.Name);
     (*this->TraceOS) << llvm::format(
       "<TemplateBegin>\n"
       "    <Kind>%s</Kind>\n"
       "    <Context context = \"%s\"/>\n"
       "    <Location>%s|%d|%d</Location>\n",
-      Entry.InstantiationKind.c_str(), EscapedName.c_str(),
+      InstantiationKindStrings[Entry.InstantiationKind], EscapedName.c_str(),
       Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
     (*this->TraceOS) << llvm::format(
@@ -442,7 +432,7 @@ protected:
       Entry.TimeStamp, Entry.MemoryUsage);
   };
 
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override {
+  void printEntryImpl(const PrintableTemplightEntryEnd& Entry) override {
     (*this->TraceOS) << llvm::format(
       "<TemplateEnd>\n"
       "    <TimeStamp time = \"%.9f\"/>\n"
@@ -506,20 +496,20 @@ protected:
     (*this->TraceOS) << "</Trace>\n";
   };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override { };
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override { };
+  void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override { };
+  void printEntryImpl(const PrintableTemplightEntryEnd& Entry) override { };
   
   int last_node_id;
   int last_edge_id;
   
   void printNodeEntryImpl(const EntryTraverseTask& Task) {
-    PrintableTraceEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
-    PrintableTraceEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
+    PrintableTemplightEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
+    PrintableTemplightEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
     std::string EscapedName = escapeXml(BegEntry.Name);
     
     (*this->TraceOS) << llvm::format(
       "<Entry Kind=\"%s\" Name=\"%s\" ",
-      BegEntry.InstantiationKind.c_str(), EscapedName.c_str());
+      InstantiationKindStrings[BegEntry.InstantiationKind], EscapedName.c_str());
     (*this->TraceOS) << llvm::format(
       "Location=\"%s|%d|%d\" ", 
       BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
@@ -597,15 +587,15 @@ protected:
     (*this->TraceOS) << "</graph>\n</graphml>\n";
   };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override { };
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override { };
+  void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override { };
+  void printEntryImpl(const PrintableTemplightEntryEnd& Entry) override { };
   
   int last_node_id;
   int last_edge_id;
   
   void printNodeEntryImpl(const EntryTraverseTask& Task) {
-    PrintableTraceEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
-    PrintableTraceEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
+    PrintableTemplightEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
+    PrintableTemplightEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
     
     (*this->TraceOS) << llvm::format("<node id=\"n%d\">\n", Task.nd_id);
     
@@ -614,7 +604,7 @@ protected:
       "  <data key=\"d0\">%s</data>\n"
       "  <data key=\"d1\">\"%s\"</data>\n"
       "  <data key=\"d2\">\"%s|%d|%d\"</data>\n",
-      BegEntry.InstantiationKind.c_str(), EscapedName.c_str(),
+      InstantiationKindStrings[BegEntry.InstantiationKind], EscapedName.c_str(),
       BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
     (*this->TraceOS) << llvm::format(
       "  <data key=\"d3\">%.9f</data>\n"
@@ -669,15 +659,15 @@ protected:
     (*this->TraceOS) << "}\n";
   };
   
-  void printEntryImpl(const PrintableTraceEntryBegin&) override {};
-  void printEntryImpl(const PrintableTraceEntryEnd&) override {};
+  void printEntryImpl(const PrintableTemplightEntryBegin&) override {};
+  void printEntryImpl(const PrintableTemplightEntryEnd&) override {};
   
   int last_node_id;
   
   void printNodeEntryImpl(const EntryTraverseTask& Task) {
     
-    PrintableTraceEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
-    PrintableTraceEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
+    PrintableTemplightEntryBegin BegEntry = rawToPrintableBegin(TheSema, *Task.it_begin);
+    PrintableTemplightEntryEnd EndEntry = rawToPrintableEnd(TheSema, *Task.it_end);
     std::string EscapedName = escapeXml(BegEntry.Name);
     (*this->TraceOS) 
       << llvm::format("n%d [label = ", Task.nd_id)
@@ -685,7 +675,7 @@ protected:
           "\"%s\\n"
           "%s\\n"
           "At %s Line %d Column %d\\n",
-        BegEntry.InstantiationKind.c_str(), EscapedName.c_str(),
+        InstantiationKindStrings[BegEntry.InstantiationKind], EscapedName.c_str(),
         BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column)
       << llvm::format(
           "Time: %.9f seconds Memory: %d bytes\" ];\n",
@@ -735,13 +725,13 @@ protected:
   void startTraceImpl() override { };
   void endTraceImpl() override { };
   
-  void printEntryImpl(const PrintableTraceEntryBegin& Entry) override { 
+  void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override { 
     (*this->TraceOS) << llvm::format(
       "TemplateBegin\n"
       "  Kind = %s\n"
       "  Name = %s\n"
       "  Location = %s|%d|%d\n",
-      Entry.InstantiationKind.c_str(), Entry.Name.c_str(),
+      InstantiationKindStrings[Entry.InstantiationKind], Entry.Name.c_str(),
       Entry.FileName.c_str(), Entry.Line, Entry.Column);
 
     (*this->TraceOS) << llvm::format(
@@ -750,7 +740,7 @@ protected:
       Entry.TimeStamp, Entry.MemoryUsage);
   };
 
-  void printEntryImpl(const PrintableTraceEntryEnd& Entry) override { 
+  void printEntryImpl(const PrintableTemplightEntryEnd& Entry) override { 
     (*this->TraceOS) << llvm::format(
       "TemplateEnd\n"
       "  TimeStamp = %.9f\n"
@@ -764,6 +754,42 @@ public:
               TemplightTracer::TracePrinter(aSema, Output) { };
   
 };
+
+
+
+
+class ProtobufPrinter : public TemplightTracer::TracePrinter {
+protected:
+  void startTraceImpl() override {
+    // get the source name from the source manager:
+    FileID fileID = TheSema.getSourceManager().getMainFileID();
+    std::string src_name =
+      TheSema.getSourceManager().getFileEntryForID(fileID)->getName();
+    Writer.initialize(src_name);
+  };
+  void endTraceImpl() override {
+    Writer.finalize();
+    Writer.dumpOnStream(*this->TraceOS);
+  };
+  
+  void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override {
+    Writer.printEntry(Entry);
+  };
+
+  void printEntryImpl(const PrintableTemplightEntryEnd& Entry) override {
+    Writer.printEntry(Entry);
+  };
+  
+public:
+  
+  ProtobufPrinter(const Sema &aSema, const std::string &Output) : 
+                  TemplightTracer::TracePrinter(aSema, Output) { };
+  
+private:
+  TemplightProtobufWriter Writer;
+};
+
+
 
 
 } // unnamed namespace
@@ -854,6 +880,10 @@ TemplightTracer::TemplightTracer(const Sema &TheSema,
   }
   else if ( Format == "nestedxml" ) {
     TemplateTracePrinter.reset(new NestedXMLPrinter(TheSema, Output));
+    return;
+  }
+  else if ( Format == "protobuf" ) {
+    TemplateTracePrinter.reset(new ProtobufPrinter(TheSema, Output));
     return;
   }
   else {
