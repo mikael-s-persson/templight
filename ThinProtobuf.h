@@ -58,10 +58,25 @@ inline std::uint64_t loadVarInt(StringRef& p_buf) {
   return u;
 }
 
+template <unsigned int tag>
+struct getVarIntWire {
+  static const unsigned int value = (tag << 3);
+};
+
+template <unsigned int tag>
+struct getIntWire {
+  static const unsigned int value = (tag << 3);
+};
+
 inline std::int64_t loadSInt(StringRef& p_buf) {
   std::uint64_t u = loadVarInt(p_buf);
   return (u >> 1) ^ (-static_cast<std::uint64_t>(u & 1));
 }
+
+template <unsigned int tag>
+struct getSIntWire {
+  static const unsigned int value = (tag << 3);
+};
 
 inline double loadDouble(StringRef& p_buf) {
   if ( p_buf.size() < sizeof(double_to_ulong) )
@@ -73,6 +88,11 @@ inline double loadDouble(StringRef& p_buf) {
   return tmp.d;
 }
 
+template <unsigned int tag>
+struct getDoubleWire {
+  static const unsigned int value = (tag << 3) | 1;
+};
+
 inline float loadFloat(StringRef& p_buf) {
   if ( p_buf.size() < sizeof(float_to_ulong) )
     return float(0.0);
@@ -83,6 +103,11 @@ inline float loadFloat(StringRef& p_buf) {
   return tmp.f;
 }
 
+template <unsigned int tag>
+struct getFloatWire {
+  static const unsigned int value = (tag << 3) | 5;
+};
+
 inline bool loadBool(StringRef& p_buf) {
   if ( p_buf.empty() )
     return false;
@@ -90,6 +115,11 @@ inline bool loadBool(StringRef& p_buf) {
   p_buf = p_buf.drop_front(1);
   return tmp;
 }
+
+template <unsigned int tag>
+struct getBoolWire {
+  static const unsigned int value = (tag << 3);
+};
 
 inline std::string loadString(StringRef& p_buf) {
   unsigned int u = loadVarInt(p_buf);
@@ -100,14 +130,10 @@ inline std::string loadString(StringRef& p_buf) {
   return s;  //NRVO
 }
 
-// These MACROs could all be constexpr functions, if that was more widely supported:
-#define LLVM_PROTOBUF_VARINT_WIRE(TAG) (TAG << 3)
-#define LLVM_PROTOBUF_INT_WIRE(TAG) (TAG << 3)
-#define LLVM_PROTOBUF_SINT_WIRE(TAG) (TAG << 3)
-#define LLVM_PROTOBUF_DOUBLE_WIRE(TAG) ((TAG << 3) | 1)
-#define LLVM_PROTOBUF_FLOAT_WIRE(TAG) ((TAG << 3) | 5)
-#define LLVM_PROTOBUF_BOOL_WIRE(TAG) (TAG << 3)
-#define LLVM_PROTOBUF_STRING_WIRE(TAG) ((TAG << 3) | 2)
+template <unsigned int tag>
+struct getStringWire {
+  static const unsigned int value = (tag << 3) | 2;
+};
 
 inline void skipData(StringRef& p_buf, unsigned int wire) {
   // FIXME: This could be more efficient (not read data).
