@@ -27,10 +27,10 @@ void TemplightProtobufReader::loadHeader(llvm::StringRef aSubBuffer) {
   while ( aSubBuffer.size() ) {
     unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
     switch( cur_wire ) {
-      case LLVM_PROTOBUF_VARINT_WIRE(1):
+      case llvm::protobuf::getVarIntWire<1>::value:
         Version = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_STRING_WIRE(2):
+      case llvm::protobuf::getStringWire<2>::value:
         SourceName = llvm::protobuf::loadString(aSubBuffer);
         break;
       default:
@@ -54,16 +54,16 @@ static void loadLocation(llvm::StringRef aSubBuffer,
   while ( aSubBuffer.size() ) {
     unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
     switch( cur_wire ) {
-      case LLVM_PROTOBUF_STRING_WIRE(1):
+      case llvm::protobuf::getStringWire<1>::value:
         FileName = llvm::protobuf::loadString(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_VARINT_WIRE(2):
+      case llvm::protobuf::getVarIntWire<2>::value:
         FileID = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_VARINT_WIRE(3):
+      case llvm::protobuf::getVarIntWire<3>::value:
         Line = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_VARINT_WIRE(4):
+      case llvm::protobuf::getVarIntWire<4>::value:
         Column = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
       default:
@@ -94,23 +94,23 @@ void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
   while ( aSubBuffer.size() ) {
     unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
     switch( cur_wire ) {
-      case LLVM_PROTOBUF_VARINT_WIRE(1):
+      case llvm::protobuf::getVarIntWire<1>::value:
         LastBeginEntry.InstantiationKind = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_STRING_WIRE(2):
+      case llvm::protobuf::getStringWire<2>::value:
         LastBeginEntry.Name = llvm::protobuf::loadString(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_STRING_WIRE(3): {
+      case llvm::protobuf::getStringWire<3>::value: {
         std::uint64_t cur_size = llvm::protobuf::loadVarInt(aSubBuffer);
         loadLocation(aSubBuffer.slice(0, cur_size), fileNameMap, 
           LastBeginEntry.FileName, LastBeginEntry.Line, LastBeginEntry.Column);
         aSubBuffer = aSubBuffer.drop_front(cur_size);
         break;
       }
-      case LLVM_PROTOBUF_DOUBLE_WIRE(4):
+      case llvm::protobuf::getDoubleWire<4>::value:
         LastBeginEntry.TimeStamp = llvm::protobuf::loadDouble(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_VARINT_WIRE(5):
+      case llvm::protobuf::getVarIntWire<5>::value:
         LastBeginEntry.MemoryUsage = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
       default:
@@ -130,10 +130,10 @@ void TemplightProtobufReader::loadEndEntry(llvm::StringRef aSubBuffer) {
   while ( aSubBuffer.size() ) {
     unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
     switch( cur_wire ) {
-      case LLVM_PROTOBUF_DOUBLE_WIRE(1):
+      case llvm::protobuf::getDoubleWire<1>::value:
         LastEndEntry.TimeStamp = llvm::protobuf::loadDouble(aSubBuffer);
         break;
-      case LLVM_PROTOBUF_VARINT_WIRE(2):
+      case llvm::protobuf::getVarIntWire<2>::value:
         LastEndEntry.MemoryUsage = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
       default:
@@ -150,7 +150,7 @@ TemplightProtobufReader::LastChunkType
   buffer = aBuffer;
   fileNameMap.clear();
   unsigned int cur_wire = llvm::protobuf::loadVarInt(buffer);
-  if ( cur_wire != LLVM_PROTOBUF_STRING_WIRE(1) ) {
+  if ( cur_wire != llvm::protobuf::getStringWire<1>::value ) {
     buffer = llvm::StringRef();
     remainder_buffer = llvm::StringRef();
     LastChunk = TemplightProtobufReader::EndOfFile;
@@ -173,23 +173,23 @@ TemplightProtobufReader::LastChunkType TemplightProtobufReader::next() {
   }
   unsigned int cur_wire = llvm::protobuf::loadVarInt(buffer);
   switch(cur_wire) {
-    case LLVM_PROTOBUF_STRING_WIRE(1): {
+    case llvm::protobuf::getStringWire<1>::value: {
       std::uint64_t cur_size = llvm::protobuf::loadVarInt(buffer);
       loadHeader(buffer.slice(0, cur_size));
       buffer = buffer.drop_front(cur_size);
       return LastChunk;
     };
-    case LLVM_PROTOBUF_STRING_WIRE(2): {
+    case llvm::protobuf::getStringWire<2>::value: {
       std::uint64_t cur_size = llvm::protobuf::loadVarInt(buffer);
       llvm::StringRef sub_buffer = buffer.slice(0, cur_size);
       buffer = buffer.drop_front(cur_size);
       cur_wire = llvm::protobuf::loadVarInt(sub_buffer);
       cur_size = llvm::protobuf::loadVarInt(sub_buffer);
       switch( cur_wire ) {
-        case LLVM_PROTOBUF_STRING_WIRE(1):
+        case llvm::protobuf::getStringWire<1>::value:
           loadBeginEntry(sub_buffer);
           break;
-        case LLVM_PROTOBUF_STRING_WIRE(2):
+        case llvm::protobuf::getStringWire<2>::value:
           loadEndEntry(sub_buffer);
           break;
         default: // ignore for fwd-compat.
