@@ -13,6 +13,7 @@
 #include "ThinProtobuf.h"
 
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/Compression.h>
 
 #include <string>
 #include <cstdint>
@@ -20,7 +21,8 @@
 namespace clang {
 
 
-TemplightProtobufWriter::TemplightProtobufWriter() { }
+TemplightProtobufWriter::TemplightProtobufWriter() : 
+  enableCompression(false) { }
 
 void TemplightProtobufWriter::initialize(const std::string& aSourceName) {
   
@@ -57,8 +59,7 @@ void TemplightProtobufWriter::dumpOnStream(llvm::raw_ostream& OS) {
 //   OS.write(buffer.data(), buffer.size()); // if not within repeated sequence of traces
 }
 
-static std::string printEntryLocation(
-    std::unordered_map< std::string, std::size_t >& fileNameMap, 
+std::string TemplightProtobufWriter::printEntryLocation(
     const std::string& FileName, int Line, int Column) {
   
   /*
@@ -93,6 +94,33 @@ static std::string printEntryLocation(
   return location_contents;  // NRVO
 }
 
+std::string TemplightProtobufWriter::printTemplateName(const std::string& Name) {
+  
+  /*
+  message TemplateName {
+    optional string name = 1;
+    optional bytes compressed_name = 2;
+  }
+  */
+  
+  std::string tname_contents;
+  llvm::raw_string_ostream OS_inner(tname_contents);
+  
+  llvm::SmallVector<char, 32> CompressedBuffer;
+  if ( enableCompression &&
+       ( llvm::zlib::compress(llvm::StringRef(Name), CompressedBuffer) 
+            == llvm::zlib::StatusOK ) ) {
+    llvm::protobuf::saveString(OS_inner, 2, 
+      llvm::StringRef(CompressedBuffer.begin(), CompressedBuffer.size()));
+  } else {
+    llvm::protobuf::saveString(OS_inner, 1, Name); // name
+  }
+  
+  OS_inner.str();
+  
+  return tname_contents;  // NRVO
+}
+
 void TemplightProtobufWriter::printEntry(const PrintableTemplightEntryBegin& aEntry) {
   
   std::string entry_contents;
@@ -109,14 +137,15 @@ void TemplightProtobufWriter::printEntry(const PrintableTemplightEntryBegin& aEn
   }
     */
     
-    llvm::protobuf::saveVarInt(OS_inner, 1, aEntry.InstantiationKind); // kind
-    llvm::protobuf::saveString(OS_inner, 2, aEntry.Name);              // name
+    llvm::protobuf::saveVarInt(OS_inner, 1, aEntry.InstantiationKind);    // kind
+    llvm::protobuf::saveString(OS_inner, 2, 
+                         printTemplateName(aEntry.Name));                 // name
     llvm::protobuf::saveString(OS_inner, 3, 
-                         printEntryLocation(fileNameMap, aEntry.FileName, 
+                         printEntryLocation(aEntry.FileName, 
                                             aEntry.Line, aEntry.Column)); // location
-    llvm::protobuf::saveDouble(OS_inner, 4, aEntry.TimeStamp);         // time_stamp
+    llvm::protobuf::saveDouble(OS_inner, 4, aEntry.TimeStamp);            // time_stamp
     if ( aEntry.MemoryUsage > 0 )
-      llvm::protobuf::saveVarInt(OS_inner, 5, aEntry.MemoryUsage);     // memory_usage
+      llvm::protobuf::saveVarInt(OS_inner, 5, aEntry.MemoryUsage);        // memory_usage
     
   }
   

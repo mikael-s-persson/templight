@@ -11,6 +11,8 @@
 
 #include "ThinProtobuf.h"
 
+#include <llvm/Support/Compression.h>
+
 #include <string>
 #include <cstdint>
 
@@ -84,6 +86,34 @@ static void loadLocation(llvm::StringRef aSubBuffer,
   
 }
 
+static void loadTemplateName(llvm::StringRef aSubBuffer, std::string& Name) {
+  // Set default values:
+  Name = "";
+  
+  while ( aSubBuffer.size() ) {
+    unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
+    switch( cur_wire ) {
+      case llvm::protobuf::getStringWire<1>::value:
+        Name = llvm::protobuf::loadString(aSubBuffer);
+        break;
+      case llvm::protobuf::getStringWire<2>::value: {
+        Name = llvm::protobuf::loadString(aSubBuffer);
+        llvm::SmallVector<char,32> UBuf;
+        if ( llvm::zlib::uncompress(Name, UBuf, Name.size() * 2) 
+                == llvm::zlib::StatusOK )
+          Name.assign(UBuf.begin(), UBuf.end());
+        else
+          Name = "";
+        break;
+      }
+      default:
+        llvm::protobuf::skipData(aSubBuffer, cur_wire);
+        break;
+    }
+  }
+  
+}
+
 void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
   // Set default values:
   LastBeginEntry.InstantiationKind = 0;
@@ -97,9 +127,12 @@ void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
       case llvm::protobuf::getVarIntWire<1>::value:
         LastBeginEntry.InstantiationKind = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
-      case llvm::protobuf::getStringWire<2>::value:
-        LastBeginEntry.Name = llvm::protobuf::loadString(aSubBuffer);
+      case llvm::protobuf::getStringWire<2>::value: {
+        std::uint64_t cur_size = llvm::protobuf::loadVarInt(aSubBuffer);
+        loadTemplateName(aSubBuffer.slice(0, cur_size), LastBeginEntry.Name);
+        aSubBuffer = aSubBuffer.drop_front(cur_size);
         break;
+      }
       case llvm::protobuf::getStringWire<3>::value: {
         std::uint64_t cur_size = llvm::protobuf::loadVarInt(aSubBuffer);
         loadLocation(aSubBuffer.slice(0, cur_size), fileNameMap, 

@@ -29,6 +29,10 @@ private:
   
   std::string buffer;
   std::unordered_map< std::string, std::size_t > fileNameMap;
+  bool enableCompression;
+  
+  std::string printEntryLocation(const std::string& FileName, int Line, int Column);
+  std::string printTemplateName(const std::string& Name);
   
 public:
   

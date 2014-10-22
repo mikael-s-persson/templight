@@ -223,13 +223,13 @@ inline void saveBool(llvm::raw_ostream& OS, unsigned int tag, bool b) {
   saveBool(OS, b);
 }
 
-inline void saveString(llvm::raw_ostream& OS, const std::string& s) {
-  unsigned int u = s.length();
+inline void saveString(llvm::raw_ostream& OS, StringRef s) {
+  unsigned int u = s.size();
   saveVarInt(OS, u);
   OS.write(s.data(), u);
 }
 
-inline void saveString(llvm::raw_ostream& OS, unsigned int tag, const std::string& s) {
+inline void saveString(llvm::raw_ostream& OS, unsigned int tag, StringRef s) {
   saveVarInt(OS, (tag << 3) | 2); // wire-type 2: length-delimited.
   saveString(OS, s);
 }
