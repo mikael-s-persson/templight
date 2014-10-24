@@ -29,8 +29,10 @@ private:
   
   std::string buffer;
   std::unordered_map< std::string, std::size_t > fileNameMap;
-  bool enableCompression;
+  std::unordered_map< std::string, std::size_t > templateNameMap;
+  int compressionMode;
   
+  std::size_t createDictionaryEntry(std::string Name);
   std::string printEntryLocation(const std::string& FileName, int Line, int Column);
   std::string printTemplateName(const std::string& Name);
   

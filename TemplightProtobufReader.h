@@ -27,8 +27,11 @@ private:
   llvm::StringRef remainder_buffer;
   
   std::vector< std::string > fileNameMap;
+  std::vector< std::string > templateNameMap;
   
   void loadHeader(llvm::StringRef aSubBuffer);
+  void loadDictionaryEntry(llvm::StringRef aSubBuffer);
+  void loadTemplateName(llvm::StringRef aSubBuffer);
   void loadBeginEntry(llvm::StringRef aSubBuffer);
   void loadEndEntry(llvm::StringRef aSubBuffer);
   

@@ -44,6 +44,39 @@ void TemplightProtobufReader::loadHeader(llvm::StringRef aSubBuffer) {
   LastChunk = TemplightProtobufReader::Header;
 }
 
+void TemplightProtobufReader::loadDictionaryEntry(llvm::StringRef aSubBuffer) {
+  // Set default values:
+  std::string name = "";
+  llvm::SmallVector<std::size_t,8> markers;
+  
+  while ( aSubBuffer.size() ) {
+    unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
+    switch( cur_wire ) {
+      case llvm::protobuf::getStringWire<1>::value:
+        name = llvm::protobuf::loadString(aSubBuffer);
+        break;
+      case llvm::protobuf::getVarIntWire<2>::value:
+        markers.push_back(llvm::protobuf::loadVarInt(aSubBuffer));
+        break;
+      default:
+        llvm::protobuf::skipData(aSubBuffer, cur_wire);
+        break;
+    }
+  }
+  
+  std::string::iterator it_name = std::find(name.begin(), name.end(), '\0');
+  llvm::SmallVector<std::size_t,8>::iterator it_mark = markers.begin();
+  while ( ( it_name != name.end() ) && ( it_mark != markers.end() ) ) {
+    std::size_t offset = it_name - name.begin();
+    name.replace(it_name, it_name + 1, templateNameMap[*it_mark]);
+    it_name = std::find(name.begin() + offset, name.end(), '\0');
+    ++it_mark;
+  }
+  
+  templateNameMap.push_back(name);
+  
+}
+
 static void loadLocation(llvm::StringRef aSubBuffer, 
                          std::vector<std::string>& fileNameMap,
                          std::string& FileName, int& Line, int& Column) {
@@ -86,24 +119,28 @@ static void loadLocation(llvm::StringRef aSubBuffer,
   
 }
 
-static void loadTemplateName(llvm::StringRef aSubBuffer, std::string& Name) {
+void TemplightProtobufReader::loadTemplateName(llvm::StringRef aSubBuffer) {
   // Set default values:
-  Name = "";
+  LastBeginEntry.Name = "";
   
   while ( aSubBuffer.size() ) {
     unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
     switch( cur_wire ) {
       case llvm::protobuf::getStringWire<1>::value:
-        Name = llvm::protobuf::loadString(aSubBuffer);
+        LastBeginEntry.Name = llvm::protobuf::loadString(aSubBuffer);
         break;
       case llvm::protobuf::getStringWire<2>::value: {
-        Name = llvm::protobuf::loadString(aSubBuffer);
+        LastBeginEntry.Name = llvm::protobuf::loadString(aSubBuffer);
         llvm::SmallVector<char,32> UBuf;
-        if ( llvm::zlib::uncompress(Name, UBuf, Name.size() * 2) 
+        if ( llvm::zlib::uncompress(LastBeginEntry.Name, UBuf, LastBeginEntry.Name.size() * 2) 
                 == llvm::zlib::StatusOK )
-          Name.assign(UBuf.begin(), UBuf.end());
+          LastBeginEntry.Name.assign(UBuf.begin(), UBuf.end());
         else
-          Name = "";
+          LastBeginEntry.Name = "";
+        break;
+      }
+      case llvm::protobuf::getVarIntWire<3>::value: {
+        LastBeginEntry.Name = templateNameMap[llvm::protobuf::loadVarInt(aSubBuffer)];
         break;
       }
       default:
@@ -129,7 +166,7 @@ void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
         break;
       case llvm::protobuf::getStringWire<2>::value: {
         std::uint64_t cur_size = llvm::protobuf::loadVarInt(aSubBuffer);
-        loadTemplateName(aSubBuffer.slice(0, cur_size), LastBeginEntry.Name);
+        loadTemplateName(aSubBuffer.slice(0, cur_size));
         aSubBuffer = aSubBuffer.drop_front(cur_size);
         break;
       }
@@ -228,6 +265,12 @@ TemplightProtobufReader::LastChunkType TemplightProtobufReader::next() {
         default: // ignore for fwd-compat.
           break;
       };
+      return LastChunk;
+    };
+    case llvm::protobuf::getStringWire<3>::value: {
+      std::uint64_t cur_size = llvm::protobuf::loadVarInt(buffer);
+      loadDictionaryEntry(buffer.slice(0, cur_size));
+      buffer = buffer.drop_front(cur_size);
       return LastChunk;
     };
     default: { // ignore for fwd-compat.
