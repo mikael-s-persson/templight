@@ -105,13 +105,12 @@ static void trimSpaces(std::string::iterator& it, std::string::iterator& it_end)
   ++it_end;
 }
 
-std::size_t TemplightProtobufWriter::createDictionaryEntry(std::string Name) {
-  std::size_t id = templateNameMap.size();
+std::size_t TemplightProtobufWriter::createDictionaryEntry(const std::string& NameOrig) {
   std::unordered_map< std::string, std::size_t >::iterator 
-    it = templateNameMap.find(Name);
-  if ( it == templateNameMap.end() ) {
-    templateNameMap[Name] = id;
-    
+    it_found = templateNameMap.find(NameOrig);
+  if ( it_found == templateNameMap.end() ) {
+    // FIXME: Convert this code to being constructive of "Name", instead of destructive (replacing sub-strings with '\0' characters).
+    std::string Name = NameOrig;
     std::string::iterator it_open = Name.end();
     std::string::iterator it_colon_lo = Name.begin();
     int srch_state = 0;
@@ -209,13 +208,16 @@ std::size_t TemplightProtobufWriter::createDictionaryEntry(std::string Name) {
     }
     OS_dict.str();
     
+    std::size_t id = templateNameMap.size();
+    templateNameMap[NameOrig] = id;
+    
     llvm::raw_string_ostream OS_outer(buffer);
     // repeated DictionaryEntry names = 3;
     llvm::protobuf::saveString(OS_outer, 3, dict_entry);
     
+    return id;
   } else 
-    id = it->second;
-  return id;
+    return it_found->second;
 }
 
 std::string TemplightProtobufWriter::printTemplateName(const std::string& Name) {
