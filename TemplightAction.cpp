@@ -119,6 +119,18 @@ std::string TemplightAction::CreateOutputFilename(
     else if ( OptOutputFormat == "text" ) {
       result += "txt";
     }
+    else if ( OptOutputFormat == "graphml" ) {
+      result += "graphml";
+    }
+    else if ( OptOutputFormat == "graphviz" ) {
+      result += "gv";
+    }
+    else if ( OptOutputFormat == "nestedxml" ) {
+      result += "xml";
+    }
+    else if ( OptOutputFormat == "protobuf" ) {
+      result += "pbf";
+    }
     else {
       llvm::errs() << "Error: [Templight-Action] Unrecognized template trace format:" 
                    << OptOutputFormat << "\n";

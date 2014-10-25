@@ -23,6 +23,8 @@ add_clang_executable(templight
   TemplightAction.cpp
   TemplightTracer.cpp
   TemplightDebugger.cpp
+  TemplightProtobufWriter.cpp
+  TemplightProtobufReader.cpp
   )
 
 target_link_libraries(templight

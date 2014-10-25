@@ -105,7 +105,7 @@ static std::string LocalOutputFilename;
 static SmallVector<std::string, 32> TempOutputFiles;
 
 static cl::opt<std::string> OutputFormat("format",
-  cl::desc("Specify the format of Templight outputs (yaml/xml/text, default is yaml)."),
+  cl::desc("Specify the format of Templight outputs (yaml/xml/text/graphml/graphviz/nestedxml, default is yaml)."),
   cl::init("yaml"), cl::cat(ClangTemplightCategory));
 
 static cl::opt<std::string> BlackListFilename("blacklist",
