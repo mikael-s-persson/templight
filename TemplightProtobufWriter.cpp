@@ -108,116 +108,116 @@ static void trimSpaces(std::string::iterator& it, std::string::iterator& it_end)
 std::size_t TemplightProtobufWriter::createDictionaryEntry(const std::string& NameOrig) {
   std::unordered_map< std::string, std::size_t >::iterator 
     it_found = templateNameMap.find(NameOrig);
-  if ( it_found == templateNameMap.end() ) {
-    // FIXME: Convert this code to being constructive of "Name", instead of destructive (replacing sub-strings with '\0' characters).
-    std::string Name = NameOrig;
-    std::string::iterator it_open = Name.end();
-    std::string::iterator it_colon_lo = Name.begin();
-    int srch_state = 0;
-    llvm::SmallVector<std::size_t, 8> markers;
-    for(std::string::iterator it = Name.begin(); it != Name.end(); ++it) {
-      switch(srch_state) {
-        case 0: 
-          if ( *it == '<' ) {
-            // check for "operator<<", "operator<" and "operator<="
-            llvm::StringRef test_str(Name.data(), it - Name.begin() + 1);
-            if ( test_str.endswith("operator<") ) {
-              it_open = Name.end();
-              srch_state = 0;
-            } else {
-              it_open = it;
-              ++srch_state;
-            }
-          } else if ( (*it == ':') && (it + 1 < Name.end()) && (*(it+1) == ':') ) {
-            if ( it_colon_lo < it ) {
-              markers.push_back( createDictionaryEntry(std::string(it_colon_lo, it)) );
-              std::size_t offset_lo  = it_colon_lo - Name.begin();
-              Name.replace(it_colon_lo, it, 1, '\0');
-              it = Name.begin() + offset_lo + 2;
-            } else {
-              it += 1;
-            }
-            it_colon_lo = it + 1;
-            it_open = Name.end();
-          }
-          break;
-        case 1:
-          if ( *it == '<' ) {
-            // check for "operator<<" and "operator<"
-            llvm::StringRef test_str(Name.data(), it - Name.begin() + 1);
-            if ( test_str.endswith("operator<<<") ) {
-              it_open = it;
-              srch_state = 1;
-            } else {
-              ++srch_state;
-            }
-          } else if ( ( *it == ',' ) || ( *it == '>' ) ) {
-            if ( it_colon_lo < it_open ) {
-              std::size_t offset_end = it - it_open;
-              std::size_t offset_lo  = it_colon_lo - Name.begin();
-              markers.push_back( createDictionaryEntry(std::string(it_colon_lo, it_open)) );
-              Name.replace(it_colon_lo, it_open, 1, '\0');
-              it_open = Name.begin() + offset_lo + 1;
-              it = it_open + offset_end;
-              it_colon_lo = Name.end();
-            }
-            std::string::iterator it_lo = it_open + 1;
-            std::string::iterator it_hi = it - 1;
-            trimSpaces(it_lo, it_hi);
-            // Create or find the marker entry:
-            markers.push_back( createDictionaryEntry(std::string(it_lo, it_hi)) );
-            std::size_t offset_end = it - it_hi;
-            std::size_t offset_lo  = it_lo - Name.begin();
-            Name.replace(it_lo, it_hi, 1, '\0');
-            it = Name.begin() + offset_lo + 1 + offset_end;
-            it_open = it;
-            it_colon_lo = Name.end();
-            if ( *it == '>' ) {
-              it_open = Name.end();
-              srch_state = 0;
-              it_colon_lo = it + 1;
-            }
-          }
-          break;
-        default:
-          if ( *it == '<' ) {
-            ++srch_state;
-          } else if ( *it == '>' ) {
-            --srch_state;
-          }
-          break;
-      }
-    }
-    if ( !markers.empty() && it_colon_lo != Name.end() ) {
-      markers.push_back( createDictionaryEntry(std::string(it_colon_lo, Name.end())) );
-      Name.replace(it_colon_lo, Name.end(), 1, '\0');
-    }
-    
-    /*
-    message DictionaryEntry {
-      required string marked_name = 1;
-      repeated uint32 marker_ids = 2;
-    }
-    */
-    std::string dict_entry;
-    llvm::raw_string_ostream OS_dict(dict_entry);
-    llvm::protobuf::saveString(OS_dict, 1, Name); // marked_name
-    for(llvm::SmallVector<std::size_t, 8>::iterator mk = markers.begin(),
-        mk_end = markers.end(); mk != mk_end; ++mk) {
-      llvm::protobuf::saveVarInt(OS_dict, 2, *mk); // marker_ids
-    }
-    OS_dict.str();
-    
-    std::size_t id = templateNameMap.size();
-    templateNameMap[NameOrig] = id;
-    
-    llvm::raw_string_ostream OS_outer(buffer);
-    // repeated DictionaryEntry names = 3;
-    llvm::protobuf::saveString(OS_outer, 3, dict_entry);
-    
-    return id;
-  } else 
+  if ( it_found != templateNameMap.end() )
     return it_found->second;
+  
+  // FIXME: Convert this code to being constructive of "Name", instead of destructive (replacing sub-strings with '\0' characters).
+  std::string Name = NameOrig;
+  std::string::iterator it_open = Name.end();
+  std::string::iterator it_colon_lo = Name.begin();
+  int srch_state = 0;
+  llvm::SmallVector<std::size_t, 8> markers;
+  for(std::string::iterator it = Name.begin(); it != Name.end(); ++it) {
+    switch(srch_state) {
+      case 0: 
+        if ( *it == '<' ) {
+          // check for "operator<<", "operator<" and "operator<="
+          llvm::StringRef test_str(Name.data(), it - Name.begin() + 1);
+          if ( test_str.endswith("operator<") ) {
+            it_open = Name.end();
+            srch_state = 0;
+          } else {
+            it_open = it;
+            ++srch_state;
+          }
+        } else if ( (*it == ':') && (it + 1 < Name.end()) && (*(it+1) == ':') ) {
+          if ( it_colon_lo < it ) {
+            markers.push_back( createDictionaryEntry(std::string(it_colon_lo, it)) );
+            std::size_t offset_lo  = it_colon_lo - Name.begin();
+            Name.replace(it_colon_lo, it, 1, '\0');
+            it = Name.begin() + offset_lo + 2;
+          } else {
+            it += 1;
+          }
+          it_colon_lo = it + 1;
+          it_open = Name.end();
+        }
+        break;
+      case 1:
+        if ( *it == '<' ) {
+          // check for "operator<<" and "operator<"
+          llvm::StringRef test_str(Name.data(), it - Name.begin() + 1);
+          if ( test_str.endswith("operator<<<") ) {
+            it_open = it;
+            srch_state = 1;
+          } else {
+            ++srch_state;
+          }
+        } else if ( ( *it == ',' ) || ( *it == '>' ) ) {
+          if ( it_colon_lo < it_open ) {
+            std::size_t offset_end = it - it_open;
+            std::size_t offset_lo  = it_colon_lo - Name.begin();
+            markers.push_back( createDictionaryEntry(std::string(it_colon_lo, it_open)) );
+            Name.replace(it_colon_lo, it_open, 1, '\0');
+            it_open = Name.begin() + offset_lo + 1;
+            it = it_open + offset_end;
+            it_colon_lo = Name.end();
+          }
+          std::string::iterator it_lo = it_open + 1;
+          std::string::iterator it_hi = it - 1;
+          trimSpaces(it_lo, it_hi);
+          // Create or find the marker entry:
+          markers.push_back( createDictionaryEntry(std::string(it_lo, it_hi)) );
+          std::size_t offset_end = it - it_hi;
+          std::size_t offset_lo  = it_lo - Name.begin();
+          Name.replace(it_lo, it_hi, 1, '\0');
+          it = Name.begin() + offset_lo + 1 + offset_end;
+          it_open = it;
+          it_colon_lo = Name.end();
+          if ( *it == '>' ) {
+            it_open = Name.end();
+            srch_state = 0;
+            it_colon_lo = it + 1;
+          }
+        }
+        break;
+      default:
+        if ( *it == '<' ) {
+          ++srch_state;
+        } else if ( *it == '>' ) {
+          --srch_state;
+        }
+        break;
+    }
+  }
+  if ( !markers.empty() && it_colon_lo != Name.end() ) {
+    markers.push_back( createDictionaryEntry(std::string(it_colon_lo, Name.end())) );
+    Name.replace(it_colon_lo, Name.end(), 1, '\0');
+  }
+  
+  /*
+  message DictionaryEntry {
+    required string marked_name = 1;
+    repeated uint32 marker_ids = 2;
+  }
+  */
+  std::string dict_entry;
+  llvm::raw_string_ostream OS_dict(dict_entry);
+  llvm::protobuf::saveString(OS_dict, 1, Name); // marked_name
+  for(llvm::SmallVector<std::size_t, 8>::iterator mk = markers.begin(),
+      mk_end = markers.end(); mk != mk_end; ++mk) {
+    llvm::protobuf::saveVarInt(OS_dict, 2, *mk); // marker_ids
+  }
+  OS_dict.str();
+  
+  std::size_t id = templateNameMap.size();
+  templateNameMap[NameOrig] = id;
+  
+  llvm::raw_string_ostream OS_outer(buffer);
+  // repeated DictionaryEntry names = 3;
+  llvm::protobuf::saveString(OS_outer, 3, dict_entry);
+  
+  return id;
 }
 
 std::string TemplightProtobufWriter::printTemplateName(const std::string& Name) {
