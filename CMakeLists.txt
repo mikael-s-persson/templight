@@ -24,7 +24,6 @@ add_clang_executable(templight
   TemplightTracer.cpp
   TemplightDebugger.cpp
   TemplightProtobufWriter.cpp
-  TemplightProtobufReader.cpp
   )
 
 target_link_libraries(templight
@@ -101,4 +100,4 @@ if(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
   endif(POLLY_LINK_LIBS)
 endif(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
 
-
+add_subdirectory(convert)

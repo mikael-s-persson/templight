@@ -271,6 +271,7 @@ TemplightProtobufReader::LastChunkType TemplightProtobufReader::next() {
       std::uint64_t cur_size = llvm::protobuf::loadVarInt(buffer);
       loadDictionaryEntry(buffer.slice(0, cur_size));
       buffer = buffer.drop_front(cur_size);
+      LastChunk = TemplightProtobufReader::Other;
       return LastChunk;
     };
     default: { // ignore for fwd-compat.

@@ -41,7 +41,8 @@ public:
     EndOfFile = 0,
     Header,
     BeginEntry,
-    EndEntry
+    EndEntry,
+    Other
   } LastChunk;
   
   unsigned int Version;
