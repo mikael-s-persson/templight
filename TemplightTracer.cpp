@@ -799,20 +799,25 @@ private:
 
 void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema, 
                           const ActiveTemplateInstantiation& Inst) {
-  if ( !TemplateTracePrinter || 
-       ( IgnoreSystemFlag && TheSema.getSourceManager()
-                              .isInSystemHeader(Inst.PointOfInstantiation) ) )
+  if ( !TemplateTracePrinter )
     return;
   
   RawTraceEntry Entry;
-  
-  // NOTE: Use this function because it produces time since start of process.
-  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_wall_time();
   
   Entry.IsTemplateBegin = true;
   Entry.InstantiationKind = Inst.Kind;
   Entry.Entity = Inst.Entity;
   Entry.PointOfInstantiation = Inst.PointOfInstantiation;
+  
+  if ( IgnoreSystemFlag && TheSema.getSourceManager()
+                            .isInSystemHeader(Inst.PointOfInstantiation) ) {
+    TemplateTracePrinter->skipEntry(Entry); // recursively skip all entries until end of this one.
+    return;
+  }
+  
+  // NOTE: Use this function because it produces time since start of process.
+  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_user_time();
+  
   Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
   
@@ -825,22 +830,21 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
 
 void TemplightTracer::atTemplateEndImpl(const Sema &TheSema, 
                           const ActiveTemplateInstantiation& Inst) {
-  if ( !TemplateTracePrinter || 
-       ( IgnoreSystemFlag && TheSema.getSourceManager()
-                              .isInSystemHeader(Inst.PointOfInstantiation) ) )
+  if ( !TemplateTracePrinter )
     return;
   
   RawTraceEntry Entry;
-
-  // NOTE: Use this function because it produces time since start of process.
-  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_wall_time();
-
+  
   Entry.IsTemplateBegin = false;
   Entry.InstantiationKind = Inst.Kind;
   Entry.Entity = Inst.Entity;
+  
+  // NOTE: Use this function because it produces time since start of process.
+  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_user_time();
+  
   Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
-
+  
   if ( SafeModeFlag ) {
     TemplateTracePrinter->printRawEntry(Entry);
   } else {
