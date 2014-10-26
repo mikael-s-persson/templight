@@ -34,6 +34,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "TemplightProtobufReader.h"
+#include "TemplightEntryPrinter.h"
 
 #include <set>
 #include <system_error>
@@ -44,11 +45,6 @@ using namespace llvm;
 
 // Mark all Templight options with this category, everything else will be handled as clang driver options.
 static cl::OptionCategory TemplightConvCategory("Templight/Convert options (USAGE: templight-convert [options] [input-file])");
-
-static cl::opt<bool> IgnoreSystemInst("ignore-system",
-  cl::desc("Ignore any template instantiation coming from \n" 
-           "system-includes (-isystem)."),
-  cl::cat(TemplightConvCategory));
 
 static cl::opt<std::string> OutputFilename("output",
   cl::desc("Write Templight profiling traces to <output-file>."), cl::value_desc("output-file"),
@@ -82,36 +78,48 @@ int main(int argc_, const char **argv_) {
     InputFilenames.push_back("-");
   }
   
-  for(unsigned int i = 0; i < InputFilenames.size(); ++i) {
-    ErrorOr< std::unique_ptr< MemoryBuffer > > p_buf = MemoryBuffer::getFileOrSTDIN(Twine(InputFilenames[i]));
-    if ( !p_buf || !p_buf.get() )
-      continue;
-    clang::TemplightProtobufReader pbf_reader;
-    pbf_reader.startOnBuffer(StringRef(p_buf.get()->getBufferStart(), p_buf.get()->getBufferSize()));
-    while ( pbf_reader.LastChunk != clang::TemplightProtobufReader::EndOfFile ) {
-      switch ( pbf_reader.LastChunk ) {
-        case clang::TemplightProtobufReader::EndOfFile:
-          break;
-        case clang::TemplightProtobufReader::Header:
-          /* FIXME not sure there is much to do here */
-          pbf_reader.next();
-          break;
-        case clang::TemplightProtobufReader::BeginEntry:
-          outs() << "Beginning entry: " << pbf_reader.LastBeginEntry.Name << "\n";
-          pbf_reader.next();
-          break;
-        case clang::TemplightProtobufReader::EndEntry:
-          outs() << "Ending entry.\n";
-          pbf_reader.next();
-          break;
-        case clang::TemplightProtobufReader::Other:
-        default:
-          pbf_reader.next();
-          break;
+  {
+    clang::TemplightEntryPrinter printer(OutputFilename, OutputFormat);
+    bool was_inited = false;
+    
+    // TODO: Add blacklists.
+    
+    for(unsigned int i = 0; i < InputFilenames.size(); ++i) {
+      ErrorOr< std::unique_ptr< MemoryBuffer > > p_buf = MemoryBuffer::getFileOrSTDIN(Twine(InputFilenames[i]));
+      if ( !p_buf || !p_buf.get() )
+        continue;
+      clang::TemplightProtobufReader pbf_reader;
+      pbf_reader.startOnBuffer(StringRef(p_buf.get()->getBufferStart(), p_buf.get()->getBufferSize()));
+      while ( pbf_reader.LastChunk != clang::TemplightProtobufReader::EndOfFile ) {
+        switch ( pbf_reader.LastChunk ) {
+          case clang::TemplightProtobufReader::EndOfFile:
+            break;
+          case clang::TemplightProtobufReader::Header:
+            if ( was_inited ) 
+              printer.finalize();
+            printer.initialize(pbf_reader.SourceName);
+            was_inited = true;
+            pbf_reader.next();
+            break;
+          case clang::TemplightProtobufReader::BeginEntry:
+            printer.printEntry(pbf_reader.LastBeginEntry);
+            pbf_reader.next();
+            break;
+          case clang::TemplightProtobufReader::EndEntry:
+            printer.printEntry(pbf_reader.LastEndEntry);
+            pbf_reader.next();
+            break;
+          case clang::TemplightProtobufReader::Other:
+          default:
+            pbf_reader.next();
+            break;
+        }
       }
     }
+    if ( was_inited )
+      printer.finalize();
+    
   }
-  
   
   return 0;
 }

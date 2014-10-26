@@ -33,7 +33,8 @@ namespace clang {
 
 namespace {
 
-struct RawTraceEntry {
+
+struct RawTemplightTraceEntry {
   bool IsTemplateBegin;
   ActiveTemplateInstantiation::InstantiationKind InstantiationKind;
   Decl *Entity;
@@ -41,10 +42,11 @@ struct RawTraceEntry {
   double TimeStamp;
   std::uint64_t MemoryUsage;
   
-  RawTraceEntry() : IsTemplateBegin(true), 
+  RawTemplightTraceEntry() : IsTemplateBegin(true), 
     InstantiationKind(ActiveTemplateInstantiation::TemplateInstantiation),
     Entity(0), TimeStamp(0.0), MemoryUsage(0) { };
 };
+
 
 const char* const InstantiationKindStrings[] = { 
   "TemplateInstantiation",
@@ -57,8 +59,7 @@ const char* const InstantiationKindStrings[] = {
   "ExceptionSpecInstantiation",
   "Memoization" };
 
-
-PrintableTemplightEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawTraceEntry& Entry) {
+PrintableTemplightEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawTemplightTraceEntry& Entry) {
   PrintableTemplightEntryBegin Ret;
   
   Ret.InstantiationKind = Entry.InstantiationKind;
@@ -86,10 +87,10 @@ PrintableTemplightEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawT
   return Ret;
 }
 
-PrintableTemplightEntryEnd rawToPrintableEnd(const Sema &TheSema, const RawTraceEntry& Entry) {
+
+PrintableTemplightEntryEnd rawToPrintableEnd(const Sema &TheSema, const RawTemplightTraceEntry& Entry) {
   return {Entry.TimeStamp, Entry.MemoryUsage};
 }
-
 
 
 std::string escapeXml(const std::string& Input) {
@@ -206,7 +207,7 @@ protected:
   
 public:
   
-  void skipEntry(const RawTraceEntry &Entry) {
+  void skipEntry(const RawTemplightTraceEntry &Entry) {
     if ( CurrentSkippedEntry.IsTemplateBegin )
       return; // Already skipping entries.
     if ( !Entry.IsTemplateBegin )
@@ -214,7 +215,7 @@ public:
     CurrentSkippedEntry = Entry;
   };
   
-  bool shouldIgnoreEntry(const RawTraceEntry &Entry) {
+  bool shouldIgnoreEntry(const RawTemplightTraceEntry &Entry) {
     
     // Check the black-lists:
     // (1) Is currently ignoring entries?
@@ -266,7 +267,7 @@ public:
     return false;
   };
   
-  virtual void printRawEntry(const RawTraceEntry &Entry) {
+  virtual void printRawEntry(const RawTemplightTraceEntry &Entry) {
     if ( shouldIgnoreEntry(Entry) )
       return;
 
@@ -284,7 +285,7 @@ public:
   };
   
   virtual void printCachedEntries() {
-    for(std::vector<RawTraceEntry>::iterator it = TraceEntries.begin();
+    for(std::vector<RawTemplightTraceEntry>::iterator it = TraceEntries.begin();
         it != TraceEntries.end(); ++it) {
       if ( it->IsTemplateBegin )
         this->printEntryImpl(rawToPrintableBegin(TheSema, *it));
@@ -294,7 +295,7 @@ public:
     TraceEntries.clear();
   };
   
-  virtual void cacheEntry(const RawTraceEntry &Entry) {
+  virtual void cacheEntry(const RawTemplightTraceEntry &Entry) {
     if ( shouldIgnoreEntry(Entry) )
       return;
     TraceEntries.push_back(Entry);
@@ -346,10 +347,10 @@ public:
   
   const Sema &TheSema;
   
-  std::vector<RawTraceEntry> TraceEntries;
-  RawTraceEntry LastBeginEntry;
+  std::vector<RawTemplightTraceEntry> TraceEntries;
+  RawTemplightTraceEntry LastBeginEntry;
   
-  RawTraceEntry CurrentSkippedEntry;
+  RawTemplightTraceEntry CurrentSkippedEntry;
   std::unique_ptr<llvm::Regex> CoRegex;
   std::unique_ptr<llvm::Regex> IdRegex;
   
@@ -450,7 +451,7 @@ public:
 
 
 struct EntryTraverseTask {
-  typedef std::vector<RawTraceEntry>::const_iterator Iter;
+  typedef std::vector<RawTemplightTraceEntry>::const_iterator Iter;
   Iter it_begin, it_end;
   int nd_id;
   int parent_id;
@@ -458,7 +459,7 @@ struct EntryTraverseTask {
     it_begin(aItBegin), it_end(aItEnd), nd_id(aNdId), parent_id(aParentId) { };
   
   static std::vector<EntryTraverseTask> recordDFSEntryTree(
-      const std::vector<RawTraceEntry>& TraceEntries,
+      const std::vector<RawTemplightTraceEntry>& TraceEntries,
       int& last_node_id) {
     
     Iter it     = TraceEntries.begin();
@@ -524,7 +525,7 @@ protected:
 public:
   
   
-  void printRawEntry(const RawTraceEntry &Entry) override {
+  void printRawEntry(const RawTemplightTraceEntry &Entry) override {
     cacheEntry(Entry);  // no immediate / safe mode supported for GraphML output.
   };
   
@@ -623,7 +624,7 @@ protected:
 public:
   
   
-  void printRawEntry(const RawTraceEntry &Entry) override {
+  void printRawEntry(const RawTemplightTraceEntry &Entry) override {
     cacheEntry(Entry);  // no immediate / safe mode supported for GraphML output.
   };
   
@@ -693,7 +694,7 @@ protected:
 public:
   
   
-  void printRawEntry(const RawTraceEntry &Entry) override {
+  void printRawEntry(const RawTemplightTraceEntry &Entry) override {
     cacheEntry(Entry);  // no immediate / safe mode supported for GraphML output.
   };
   
@@ -769,7 +770,6 @@ protected:
   };
   void endTraceImpl() override {
     Writer.finalize();
-    Writer.dumpOnStream(*this->TraceOS);
   };
   
   void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override {
@@ -783,7 +783,7 @@ protected:
 public:
   
   ProtobufPrinter(const Sema &aSema, const std::string &Output) : 
-                  TemplightTracer::TracePrinter(aSema, Output) { };
+                  TemplightTracer::TracePrinter(aSema, Output), Writer(*this->TraceOS) { };
   
 private:
   TemplightProtobufWriter Writer;
@@ -802,7 +802,7 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
   if ( !TemplateTracePrinter )
     return;
   
-  RawTraceEntry Entry;
+  RawTemplightTraceEntry Entry;
   
   Entry.IsTemplateBegin = true;
   Entry.InstantiationKind = Inst.Kind;
@@ -833,7 +833,7 @@ void TemplightTracer::atTemplateEndImpl(const Sema &TheSema,
   if ( !TemplateTracePrinter )
     return;
   
-  RawTraceEntry Entry;
+  RawTemplightTraceEntry Entry;
   
   Entry.IsTemplateBegin = false;
   Entry.InstantiationKind = Inst.Kind;

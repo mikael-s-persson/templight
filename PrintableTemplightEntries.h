@@ -13,6 +13,10 @@
 #include <string>
 #include <cstdint>
 
+namespace llvm {
+  class raw_ostream;
+}
+
 namespace clang {
 
 struct PrintableTemplightEntryBegin {
@@ -29,6 +33,24 @@ struct PrintableTemplightEntryEnd {
   double TimeStamp;
   std::uint64_t MemoryUsage;
 };
+
+
+class TemplightWriter {
+public:
+  
+  TemplightWriter(llvm::raw_ostream& aOS) : OutputOS(aOS) { };
+  virtual ~TemplightWriter() { };
+  
+  virtual void initialize(const std::string& aSourceName = "") = 0;
+  virtual void finalize() = 0;
+  
+  virtual void printEntry(const PrintableTemplightEntryBegin& aEntry) = 0;
+  virtual void printEntry(const PrintableTemplightEntryEnd& aEntry) = 0;
+  
+protected:
+  llvm::raw_ostream& OutputOS;
+};
+
 
 }
 

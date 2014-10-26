@@ -10,6 +10,8 @@
 #ifndef LLVM_CLANG_TEMPLIGHT_PROTOBUF_WRITER_H
 #define LLVM_CLANG_TEMPLIGHT_PROTOBUF_WRITER_H
 
+#include "PrintableTemplightEntries.h"
+
 #include <string>
 #include <unordered_map>
 
@@ -20,11 +22,7 @@ namespace llvm {
 namespace clang {
 
 
-struct PrintableTemplightEntryBegin;
-struct PrintableTemplightEntryEnd;
-
-
-class TemplightProtobufWriter {
+class TemplightProtobufWriter : public TemplightWriter {
 private:
   
   std::string buffer;
@@ -38,15 +36,13 @@ private:
   
 public:
   
-  TemplightProtobufWriter();
+  TemplightProtobufWriter(llvm::raw_ostream& aOS);
   
-  void initialize(const std::string& aSourceName = "");
-  std::string& finalize();
+  void initialize(const std::string& aSourceName = "") override;
+  void finalize() override;
   
-  void dumpOnStream(llvm::raw_ostream& OS);
-  
-  void printEntry(const PrintableTemplightEntryBegin& aEntry);
-  void printEntry(const PrintableTemplightEntryEnd& aEntry);
+  void printEntry(const PrintableTemplightEntryBegin& aEntry) override;
+  void printEntry(const PrintableTemplightEntryEnd& aEntry) override;
   
 };
 

@@ -23,6 +23,8 @@ include_directories("../")
 add_clang_executable(templight-convert
   templight_convert.cpp
   TemplightProtobufReader.cpp
+  TemplightExtraWriters.cpp
+  TemplightEntryPrinter.cpp
   )
 
 set_target_properties(templight-convert PROPERTIES VERSION ${CLANG_EXECUTABLE_VERSION})

@@ -21,7 +21,7 @@
 namespace clang {
 
 
-TemplightProtobufWriter::TemplightProtobufWriter() : 
+TemplightProtobufWriter::TemplightProtobufWriter(llvm::raw_ostream& aOS) : TemplightWriter(aOS),
   compressionMode(2) { }
 
 void TemplightProtobufWriter::initialize(const std::string& aSourceName) {
@@ -49,13 +49,9 @@ void TemplightProtobufWriter::initialize(const std::string& aSourceName) {
   
 }
 
-std::string& TemplightProtobufWriter::finalize() {
-  return buffer;
-}
-
-void TemplightProtobufWriter::dumpOnStream(llvm::raw_ostream& OS) {
+void TemplightProtobufWriter::finalize() {
   // repeated TemplightTrace traces = 1;
-  llvm::protobuf::saveString(OS, 1, buffer);
+  llvm::protobuf::saveString(OutputOS, 1, buffer);
 }
 
 std::string TemplightProtobufWriter::printEntryLocation(
