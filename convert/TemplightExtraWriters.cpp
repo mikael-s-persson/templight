@@ -300,7 +300,7 @@ void TemplightTreeWriter::finalize() {
   std::vector<EntryTraversalTask>& tree = p_tree->parent_stack;
   
   for(std::size_t i = 0, i_end = tree.size(); i != i_end; ++i ) {
-    while ( !open_set.empty() && (i > tree[open_set.back()].id_end) ) {
+    while ( !open_set.empty() && (i >= tree[open_set.back()].id_end) ) {
       closePrintedTreeNode(tree[open_set.back()]);
       open_set.pop_back();
     }
