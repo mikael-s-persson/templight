@@ -36,7 +36,7 @@ private:
   
 public:
   
-  TemplightProtobufWriter(llvm::raw_ostream& aOS);
+  TemplightProtobufWriter(llvm::raw_ostream& aOS, int aCompressLevel = 2);
   
   void initialize(const std::string& aSourceName = "") override;
   void finalize() override;

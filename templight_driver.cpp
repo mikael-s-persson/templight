@@ -628,7 +628,7 @@ int main(int argc_, const char **argv_) {
       std::string FinalOutputFilename = TemplightAction::CreateOutputFilename(
         nullptr, OutputFilename, OutputFormat, 
         InstProfiler, OutputToStdOut, MemoryProfile);
-      if ( ( !FinalOutputFilename.empty() ) && ( FinalOutputFilename != "stdout" ) ) {
+      if ( ( !FinalOutputFilename.empty() ) && ( FinalOutputFilename != "-" ) ) {
         std::error_code error;
         llvm::raw_fd_ostream TraceOS(FinalOutputFilename, error, llvm::sys::fs::F_None);
         if ( error ) {

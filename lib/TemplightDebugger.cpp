@@ -794,13 +794,60 @@ TemplightDebugger::~TemplightDebugger() {
   // must be defined here due to TracePrinter being incomplete in header.
 }
 
-void TemplightDebugger::setBlacklists(const std::string& ContextPattern, 
-                                      const std::string& IdentifierPattern) {
-  if ( Interactor ) {
-    Interactor->CoRegex.reset(new llvm::Regex(ContextPattern));
-    Interactor->IdRegex.reset(new llvm::Regex(IdentifierPattern));
+void TemplightDebugger::readBlacklists(const std::string& BLFilename) {
+  if ( !Interactor || BLFilename.empty() ) {
+    Interactor->CoRegex.reset();
+    Interactor->IdRegex.reset();
+    return;
   }
+  
+  std::string CoPattern, IdPattern;
+  
+  llvm::ErrorOr< std::unique_ptr<llvm::MemoryBuffer> >
+    file_epbuf = llvm::MemoryBuffer::getFile(llvm::Twine(BLFilename));
+  if(!file_epbuf || (!file_epbuf.get())) {
+    llvm::errs() << "Error: [Templight-Action] Could not open the blacklist file!\n";
+    Interactor->CoRegex.reset();
+    Interactor->IdRegex.reset();
+    return;
+  }
+  
+  llvm::Regex findCo("^context ");
+  llvm::Regex findId("^identifier ");
+  
+  const char* it      = file_epbuf.get()->getBufferStart();
+  const char* it_mark = file_epbuf.get()->getBufferStart();
+  const char* it_end  = file_epbuf.get()->getBufferEnd();
+  
+  while( it_mark != it_end ) {
+    it_mark = std::find(it, it_end, '\n');
+    if(*(it_mark-1) == '\r')
+      --it_mark;
+    llvm::StringRef curLine(&(*it), it_mark - it);
+    if( findCo.match(curLine) ) {
+      if(!CoPattern.empty())
+        CoPattern += '|';
+      CoPattern += '(';
+      CoPattern.append(&(*(it+8)), it_mark - it - 8);
+      CoPattern += ')';
+    } else if( findId.match(curLine) ) {
+      if(!IdPattern.empty())
+        IdPattern += '|';
+      IdPattern += '(';
+      IdPattern.append(&(*(it+11)), it_mark - it - 11);
+      IdPattern += ')';
+    }
+    while( (it_mark != it_end) && 
+           ((*it_mark == '\n') || (*it_mark == '\r')) )
+      ++it_mark;
+    it = it_mark;
+  }
+  
+  Interactor->CoRegex.reset(new llvm::Regex(CoPattern));
+  Interactor->IdRegex.reset(new llvm::Regex(IdPattern));
+  return;
 }
+
 
 } // namespace clang
 

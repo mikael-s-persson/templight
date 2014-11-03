@@ -12,30 +12,27 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/Config/llvm-config.h"
-#include "llvm/Option/ArgList.h"
-#include "llvm/Option/OptTable.h"
-#include "llvm/Option/Option.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/DynamicLibrary.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Host.h"
-#include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/Path.h"
-#include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Process.h"
-#include "llvm/Support/Signals.h"
-#include "llvm/Support/raw_ostream.h"
+#include <llvm/Option/ArgList.h>
+#include <llvm/Option/OptTable.h>
+#include <llvm/Option/Option.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/ErrorHandling.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/Path.h>
+#include <llvm/Support/PrettyStackTrace.h>
+#include <llvm/Support/Process.h>
+#include <llvm/Support/Signals.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include "TemplightProtobufReader.h"
 #include "TemplightEntryPrinter.h"
 
+#include "TemplightExtraWriters.h"
+#include "TemplightProtobufWriter.h"
+
+#include <memory>
+#include <string>
 #include <set>
 #include <system_error>
 
@@ -65,6 +62,48 @@ static cl::list<std::string> InputFilenames(cl::Positional,
   cl::desc("<input files>"),
   cl::cat(TemplightConvCategory));
 
+static cl::opt<int> OutputCompression("compression",
+  cl::desc("Specify the compression level of Templight outputs whenever the format allows."),
+  cl::init(0), cl::cat(TemplightConvCategory));
+static cl::alias OutputCompressionA("c", cl::desc("Alias for -compression"), cl::aliasopt(OutputCompression));
+
+
+static void CreateTemplightWriter(clang::TemplightEntryPrinter& printer) {
+  const std::string& Format = OutputFormat;
+  int Compression = OutputCompression;
+  
+  if ( !printer.getTraceStream() ) {
+    llvm::errs() << "Error: [Templight-Tracer] Failed to create template trace file!";
+    return;
+  }
+  
+  if ( ( Format.empty() ) || ( Format == "yaml" ) ) {
+    printer.takeWriter(new clang::TemplightYamlWriter(*printer.getTraceStream()));
+  }
+  else if ( Format == "xml" ) {
+    printer.takeWriter(new clang::TemplightXmlWriter(*printer.getTraceStream()));
+  }
+  else if ( Format == "text" ) {
+    printer.takeWriter(new clang::TemplightTextWriter(*printer.getTraceStream()));
+  }
+  else if ( Format == "graphml" ) {
+    printer.takeWriter(new clang::TemplightGraphMLWriter(*printer.getTraceStream()));
+  }
+  else if ( Format == "graphviz" ) {
+    printer.takeWriter(new clang::TemplightGraphVizWriter(*printer.getTraceStream()));
+  }
+  else if ( Format == "nestedxml" ) {
+    printer.takeWriter(new clang::TemplightNestedXMLWriter(*printer.getTraceStream()));
+  }
+  else if ( Format == "protobuf" ) {
+    printer.takeWriter(new clang::TemplightProtobufWriter(*printer.getTraceStream(),Compression));
+  }
+  else {
+    llvm::errs() << "Error: [Templight-Tracer] Unrecognized template trace format:" << Format;
+    return;
+  }
+}
+
 
 int main(int argc_, const char **argv_) {
 //   sys::PrintStackTraceOnErrorSignal();
@@ -79,10 +118,13 @@ int main(int argc_, const char **argv_) {
   }
   
   {
-    clang::TemplightEntryPrinter printer(OutputFilename, OutputFormat);
+    clang::TemplightEntryPrinter printer(OutputFilename);
+    CreateTemplightWriter(printer);
     bool was_inited = false;
     
-    // TODO: Add blacklists.
+    if( ! BlackListFilename.empty() ) {
+      printer.readBlacklists(BlackListFilename);
+    }
     
     for(unsigned int i = 0; i < InputFilenames.size(); ++i) {
       ErrorOr< std::unique_ptr< MemoryBuffer > > p_buf = MemoryBuffer::getFileOrSTDIN(Twine(InputFilenames[i]));

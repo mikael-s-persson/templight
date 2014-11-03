@@ -37,11 +37,16 @@ public:
   void initialize(const std::string& SourceName = "");
   void finalize();
   
-  TemplightEntryPrinter(const std::string &Output, const std::string &Format = "yaml");
+  TemplightEntryPrinter(const std::string &Output);
   ~TemplightEntryPrinter();
   
   bool isValid() const;
-
+  
+  llvm::raw_ostream* getTraceStream() const;
+  void takeWriter(TemplightWriter* aPWriter);
+  
+  void readBlacklists(const std::string& BLFilename);
+  
 private:
   
   PrintableTemplightEntryBegin CurrentSkippedEntry;

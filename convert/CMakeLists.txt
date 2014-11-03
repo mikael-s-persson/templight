@@ -4,13 +4,14 @@ set( LLVM_LINK_COMPONENTS
   Support
   )
 
-include_directories("../")
+include_directories("../lib/")
 
 add_clang_executable(templight-convert
   templight_convert.cpp
-  TemplightProtobufReader.cpp
-  TemplightExtraWriters.cpp
-  TemplightEntryPrinter.cpp
+  )
+
+target_link_libraries(templight-convert
+  templight-static
   )
 
 set_target_properties(templight-convert PROPERTIES VERSION ${CLANG_EXECUTABLE_VERSION})

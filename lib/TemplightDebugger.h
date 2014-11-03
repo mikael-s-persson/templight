@@ -48,8 +48,7 @@ public:
   
   bool getMemoryFlag() const { return MemoryFlag; };
   
-  void setBlacklists(const std::string& ContextPattern, 
-                     const std::string& IdentifierPattern);
+  void readBlacklists(const std::string& BLFilename);
   
 };
 

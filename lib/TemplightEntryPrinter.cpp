@@ -9,11 +9,9 @@
 
 #include "TemplightEntryPrinter.h"
 
-#include "TemplightExtraWriters.h"
-// #include "TemplightProtobufWriter.h"
-
-#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FileSystem.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Regex.h>
 
 
@@ -85,7 +83,7 @@ void TemplightEntryPrinter::finalize() {
     p_writer->finalize();
 }
 
-TemplightEntryPrinter::TemplightEntryPrinter(const std::string &Output, const std::string &Format) : TraceOS(0) {
+TemplightEntryPrinter::TemplightEntryPrinter(const std::string &Output) : TraceOS(0) {
   CurrentSkippedEntry.Name = "";
   if ( Output == "-" ) {
     TraceOS = &llvm::outs();
@@ -100,30 +98,6 @@ TemplightEntryPrinter::TemplightEntryPrinter(const std::string &Output, const st
       return;
     }
   }
-  
-  if ( ( Format.empty() ) || ( Format == "yaml" ) ) {
-    p_writer.reset(new TemplightYamlWriter(*TraceOS));
-  }
-  else if ( Format == "xml" ) {
-    p_writer.reset(new TemplightXmlWriter(*TraceOS));
-  }
-  else if ( Format == "text" ) {
-    p_writer.reset(new TemplightTextWriter(*TraceOS));
-  }
-  else if ( Format == "graphml" ) {
-    p_writer.reset(new TemplightGraphMLWriter(*TraceOS));
-  }
-  else if ( Format == "graphviz" ) {
-    p_writer.reset(new TemplightGraphVizWriter(*TraceOS));
-  }
-  else if ( Format == "nestedxml" ) {
-    p_writer.reset(new TemplightNestedXMLWriter(*TraceOS));
-  }
-  else {
-    llvm::errs() << "Error: [Templight-Tracer] Unrecognized template trace format:" << Format;
-    return;
-  }
-  
 }
 
 TemplightEntryPrinter::~TemplightEntryPrinter() {
@@ -136,6 +110,66 @@ TemplightEntryPrinter::~TemplightEntryPrinter() {
 }
 
 bool TemplightEntryPrinter::isValid() const { return p_writer.get(); }
+
+llvm::raw_ostream* TemplightEntryPrinter::getTraceStream() const { return TraceOS; }
+
+void TemplightEntryPrinter::takeWriter(TemplightWriter* aPWriter) {
+  p_writer.reset(aPWriter);
+}
+
+void TemplightEntryPrinter::readBlacklists(const std::string& BLFilename) {
+  if ( BLFilename.empty() ) {
+    CoRegex.reset();
+    IdRegex.reset();
+    return;
+  }
+  
+  std::string CoPattern, IdPattern;
+  
+  llvm::ErrorOr< std::unique_ptr<llvm::MemoryBuffer> >
+    file_epbuf = llvm::MemoryBuffer::getFile(llvm::Twine(BLFilename));
+  if(!file_epbuf || (!file_epbuf.get())) {
+    llvm::errs() << "Error: [Templight-Action] Could not open the blacklist file!\n";
+    CoRegex.reset();
+    IdRegex.reset();
+    return;
+  }
+  
+  llvm::Regex findCo("^context ");
+  llvm::Regex findId("^identifier ");
+  
+  const char* it      = file_epbuf.get()->getBufferStart();
+  const char* it_mark = file_epbuf.get()->getBufferStart();
+  const char* it_end  = file_epbuf.get()->getBufferEnd();
+  
+  while( it_mark != it_end ) {
+    it_mark = std::find(it, it_end, '\n');
+    if(*(it_mark-1) == '\r')
+      --it_mark;
+    llvm::StringRef curLine(&(*it), it_mark - it);
+    if( findCo.match(curLine) ) {
+      if(!CoPattern.empty())
+        CoPattern += '|';
+      CoPattern += '(';
+      CoPattern.append(&(*(it+8)), it_mark - it - 8);
+      CoPattern += ')';
+    } else if( findId.match(curLine) ) {
+      if(!IdPattern.empty())
+        IdPattern += '|';
+      IdPattern += '(';
+      IdPattern.append(&(*(it+11)), it_mark - it - 11);
+      IdPattern += ')';
+    }
+    while( (it_mark != it_end) && 
+           ((*it_mark == '\n') || (*it_mark == '\r')) )
+      ++it_mark;
+    it = it_mark;
+  }
+  
+  CoRegex.reset(new llvm::Regex(CoPattern));
+  IdRegex.reset(new llvm::Regex(IdPattern));
+  return;
+}
 
 
 }

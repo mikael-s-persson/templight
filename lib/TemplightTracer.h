@@ -36,7 +36,7 @@ private:
   unsigned SafeModeFlag : 1;
   unsigned IgnoreSystemFlag : 1;
   
-  std::unique_ptr<TracePrinter> TemplateTracePrinter;
+  std::unique_ptr<TracePrinter> Printer;
   
 public:
   
@@ -54,8 +54,7 @@ public:
   bool getMemoryFlag() const { return MemoryFlag; };
   bool getSafeModeFlag() const { return SafeModeFlag; };
   
-  void setBlacklists(const std::string& ContextPattern, 
-                     const std::string& IdentifierPattern);
+  void readBlacklists(const std::string& BLFilename);
   
 };
 

@@ -21,8 +21,8 @@
 namespace clang {
 
 
-TemplightProtobufWriter::TemplightProtobufWriter(llvm::raw_ostream& aOS) : TemplightWriter(aOS),
-  compressionMode(2) { }
+TemplightProtobufWriter::TemplightProtobufWriter(llvm::raw_ostream& aOS, int aCompressLevel) : 
+  TemplightWriter(aOS), compressionMode(aCompressLevel) { }
 
 void TemplightProtobufWriter::initialize(const std::string& aSourceName) {
   
@@ -240,11 +240,11 @@ std::string TemplightProtobufWriter::printTemplateName(const std::string& Name) 
       } // else, go to case 0:
     }
     case 0:
-    default:
       // optional string name = 1;
       llvm::protobuf::saveString(OS_inner, 1, Name); // name
       break;
     case 2:
+    default:
       // optional uint32 dict_id = 3;
       llvm::protobuf::saveVarInt(OS_inner, 3, 
         createDictionaryEntry(Name));

@@ -1,4 +1,6 @@
 
+add_subdirectory(lib)
+
 set( LLVM_LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
   Analysis
@@ -18,15 +20,14 @@ set( LLVM_LINK_COMPONENTS
   Vectorize
   )
 
+include_directories("lib/")
+
 add_clang_executable(templight
   templight_driver.cpp
-  TemplightAction.cpp
-  TemplightTracer.cpp
-  TemplightDebugger.cpp
-  TemplightProtobufWriter.cpp
   )
 
 target_link_libraries(templight
+  templight-static
   clangBasic
   clangFrontend
   clangFrontendTool
