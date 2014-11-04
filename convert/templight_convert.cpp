@@ -45,12 +45,12 @@ static cl::OptionCategory TemplightConvCategory("Templight/Convert options (USAG
 
 static cl::opt<std::string> OutputFilename("output",
   cl::desc("Write Templight profiling traces to <output-file>."), cl::value_desc("output-file"),
-  cl::cat(TemplightConvCategory));
+  cl::init("-"), cl::cat(TemplightConvCategory));
 static cl::alias OutputFilenameA("o", cl::desc("Alias for -output"), cl::aliasopt(OutputFilename));
 
 static cl::opt<std::string> OutputFormat("format",
-  cl::desc("Specify the format of Templight outputs (yaml / xml / text / graphml / graphviz / nestedxml / protobuf, default is yaml)."),
-  cl::init("yaml"), cl::cat(TemplightConvCategory));
+  cl::desc("Specify the format of Templight outputs (protobuf / yaml / xml / text / graphml / graphviz / nestedxml, default is protobuf)."),
+  cl::init("protobuf"), cl::cat(TemplightConvCategory));
 static cl::alias OutputFormatA("f", cl::desc("Alias for -format"), cl::aliasopt(OutputFormat));
 
 static cl::opt<std::string> BlackListFilename("blacklist",
@@ -77,8 +77,8 @@ static void CreateTemplightWriter(clang::TemplightEntryPrinter& printer) {
     return;
   }
   
-  if ( ( Format.empty() ) || ( Format == "yaml" ) ) {
-    printer.takeWriter(new clang::TemplightYamlWriter(*printer.getTraceStream()));
+  if ( ( Format.empty() ) || ( Format == "protobuf" ) ) {
+    printer.takeWriter(new clang::TemplightProtobufWriter(*printer.getTraceStream(),Compression));
   }
   else if ( Format == "xml" ) {
     printer.takeWriter(new clang::TemplightXmlWriter(*printer.getTraceStream()));
@@ -95,8 +95,8 @@ static void CreateTemplightWriter(clang::TemplightEntryPrinter& printer) {
   else if ( Format == "nestedxml" ) {
     printer.takeWriter(new clang::TemplightNestedXMLWriter(*printer.getTraceStream()));
   }
-  else if ( Format == "protobuf" ) {
-    printer.takeWriter(new clang::TemplightProtobufWriter(*printer.getTraceStream(),Compression));
+  else if ( Format == "yaml" ) {
+    printer.takeWriter(new clang::TemplightYamlWriter(*printer.getTraceStream()));
   }
   else {
     llvm::errs() << "Error: [Templight-Tracer] Unrecognized template trace format:" << Format;

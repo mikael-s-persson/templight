@@ -63,8 +63,8 @@ std::string TemplightAction::CreateOutputFilename(
   std::string postfix;
   if( result.rfind(".trace.") == std::string::npos ) {
     result += (OptMemoryProfile ? ".memory.trace." : ".trace.");
-    if ( ( OptOutputFormat.empty() ) || ( OptOutputFormat == "yaml" ) ) {
-      result += "yaml";
+    if ( ( OptOutputFormat.empty() ) || ( OptOutputFormat == "protobuf" ) ) {
+      result += "pbf";
     }
     else if ( OptOutputFormat == "xml" ) {
       result += "xml";
@@ -81,8 +81,8 @@ std::string TemplightAction::CreateOutputFilename(
     else if ( OptOutputFormat == "nestedxml" ) {
       result += "xml";
     }
-    else if ( OptOutputFormat == "protobuf" ) {
-      result += "pbf";
+    else if ( OptOutputFormat == "yaml" ) {
+      result += "yaml";
     }
     else {
       llvm::errs() << "Error: [Templight-Action] Unrecognized template trace format:" 

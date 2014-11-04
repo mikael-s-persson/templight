@@ -2,6 +2,8 @@
 
 Templight is a Clang-based tool to profile the time and memory consumption of template instantiations and to perform interactive debugging sessions to gain introspection into the template instantiation process.
 
+**Disclaimer**: Templight is still at a very preliminary state. We hope to get as much early adoption and testing as we can get, but be aware that we are still experimenting with the output formats and some of the behaviors. 
+
 ## Table of Contents
 
 - [Templight Profiler](#templight-profiler)
@@ -11,6 +13,7 @@ Templight is a Clang-based tool to profile the time and memory consumption of te
  - [Invoking Templight](#invoking-templight)
 - [Using the Templight Profiler](#using-the-templight-profiler)
  - [Default Output Location](#default-output-location)
+ - [Converting the Output Format](converting-the-output-format)
 - [Using the Templight Debugger](#using-the-templight-debugger)
 - [Using Blacklists](#using-blacklists)
 - [Inspecting the profiles](#inspecting-the-profiles)
@@ -20,22 +23,15 @@ Templight is a Clang-based tool to profile the time and memory consumption of te
 
 The templight profiler is intended to be used as a drop-in substitute for the clang compiler (or one of its variants, like clang-cl) and it performs a full compilation, *honoring all the clang compiler options*, but records a trace (or history) of the template instantiations performed by the compiler for each translation unit.
 
-The profiler will record a time-stamp when a template instantiation is entered and when it is exited, which is what forms the compilation-time profile of the template instantiations of a translation unit. The total memory consumption can also be recorded at these points, which might skew the time profiles slightly, but provide a profile of memory consumed by the compiler during the template instantiations.
-
-Currently, templight provides the following output formats:
-
- - "yaml": Output in a YAML format, which is a simple text-based markup language.
- - "xml": Output in an XML format, the well-known text-based markup language.
- - "text": Output in a simple text file.
+The profiler will record a time-stamp when a template instantiation is entered and when it is exited, which is what forms the compilation-time profile of the template instantiations of a translation unit. The total memory consumption can also be recorded at these points, which will skew the time profiles, but provide a profile of the memory consumed by the compiler during the template instantiations.
 
 The profiler is enabled by the templight option `-profiler`, and it supports the following additional templight options:
 
- - `-stdout` - Output template instantiation traces to standard output.
+ - `-stdout` - Output template instantiation traces to standard output (mainly for piping / redirecting purposes). Warning: you need to make sure the source files compile cleanly, otherwise, the output will be corrupted by warning or error messages.
  - `-memory` - Profile the memory usage during template instantiations.
  - `-safe-mode` - Output Templight traces without buffering, not to lose them at failure (note: this will distort the timing profiles due to file I/O latency).
  - `-ignore-system` - Ignore any template instantiation located in system-includes (-isystem), such as from the STL.
  - `-output=<file>` - Write Templight profiling traces to <file>. By default, it outputs to "current_source.cpp.trace.<format-extension>" or "current_source.cpp.memory.trace.<format-extension>" (if `-memory` is used).
- - `-format=<string>` - Specify the format of Templight outputs (yaml/xml/text, default is yaml).
  - `-blacklist=<file>` - Specify a blacklist file that lists declaration contexts (e.g., namespaces) and identifiers (e.g., `std::basic_string`) as regular expressions to be filtered out of the trace (not appear in the profiler trace files). Every line of the blacklist file should contain either "context" or "identifier", followed by a single space character and then, a valid regular expression.
 
 ## Templight Debugger
@@ -57,7 +53,7 @@ The debugger is enabled by the templight option `-debugger`, and it supports the
 
 Templight must be compiled from source, alongside the Clang source code.
 
-1. [Follow the instructions from LLVM/Clang](http://clang.llvm.org/get_started.html) to get a local copy of the Clang source code.
+1. [Follow the instructions from LLVM/Clang](http://clang.llvm.org/get_started.html) to get a local copy of the **latest svn trunk** of the Clang source code.
 
 2. Clone the templight repository into the clang directories, as follows:
 ```bash
@@ -167,6 +163,31 @@ The overall behavior in the above three cases is designed such that when templig
 
 **Many Source Files, (Some Output) File**: If you invoke the compilation of several source files to be linked into a single executable or library, then templight will merge all the traces into a single output file, whose name is derived from the executable or library name. If no output name is specified, the compiler puts the executable into `a.out`, and templight will put its traces into `a.trace.yaml`. If you specify an output file via the `-output` option, then the trace will be put into that file.
 
+### Converting the Output Format
+
+Templight outputs its traces to a Google protocol buffer output format to minimize the size of the files and the time necessary to produce and load the trace files. For convenience, however, a conversion tool is provided, `templight-convert`, to produce other output formats that may be more convenient for third-party applications. Currently, `templight-convert` provides the following output formats:
+
+ - "protobuf": Output in a Google protocol buffer format, which is an efficient binary extensible format. The message definition file is provided, as `templight_message.proto`, so that off-the-shelf protobuf software can be used to read the trace files. The format uses some dictionary-based compression to minimize it's size, therefore, additional steps are necessary to reconstruct the file names and template names.
+ - "yaml": A YAML format, which is a simple text-based markup language.
+ - "xml": An XML format, the well-known text-based markup language.
+ - "text": A simple text file, mostly for human-readability.
+ - "nestedxml": An XML format with nested template instantiations instead of a flat begin-end structure (used with "xml").
+ - "graphml": A standard XML-like graph markup language, supported by many graph vizualization software.
+ - "graphviz": A graph vizualization format, supported by the popular graphviz library and "dot" utility program for rendering diagrams.
+
+The `templight-convert` utility is used as follows:
+```bash
+    $ templight-convert [options] [input-files]
+```
+
+The `templight-convert` utility supports the following options:
+
+ - `-output` or `-o` - Write Templight profiling traces to <output-file>.
+ - `-format` or `-f` - Specify the format of Templight outputs (protobuf / yaml / xml / text / graphml / graphviz / nestedxml, default is protobuf).
+ - `-blacklist` or `-b` - Use regex expressions in <file> to filter out undesirable traces.
+ - `-compression` or `-c` - Specify the compression level of Templight outputs whenever the format allows.
+ - `-blacklist=<file>` - Specify a blacklist file that lists declaration contexts (e.g., namespaces) and identifiers (e.g., `std::basic_string`) as regular expressions to be filtered out of the trace (not appear in the profiler trace files). Every line of the blacklist file should contain either "context" or "identifier", followed by a single space character and then, a valid regular expression.
+
 ## Using the Templight Debugger
 
 The templight debugger is invoked by specifying the templight-option `-debugger`. When the debugger is launched, it will interrupt the compilation with a console command prompt, just like GDB. The templight debugger is designed to work in a similar fashion as GDB, with many of the same familiar commands and behavior.
@@ -245,7 +266,7 @@ Here is an example blacklist file that uses some of the examples mentioned above
 
 Any contribution or work towards such an application is more than welcomed! The formats of the traces being text-based and using fairly standard markup languages will hopefully facilitate the development of such applications.
 
-The [Templar application](https://github.com/schulmar/Templar) was one application that allows the user to open and inspect the traces produced by Templight.
+The [Templar application](https://github.com/schulmar/Templar) is one application that allows the user to open and inspect the traces produced by Templight.
 
 ## Credits
 
