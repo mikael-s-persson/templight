@@ -105,8 +105,8 @@ static std::string LocalOutputFilename;
 static SmallVector<std::string, 32> TempOutputFiles;
 
 static cl::opt<std::string> OutputFormat("format",
-  cl::desc("Specify the format of Templight outputs (yaml/xml/text/graphml/graphviz/nestedxml, default is yaml)."),
-  cl::init("yaml"), cl::cat(ClangTemplightCategory));
+  cl::desc("Specify the format of Templight outputs (protobuf/yaml/xml/text/graphml/graphviz/nestedxml, default is protobuf)."),
+  cl::init("protobuf"), cl::cat(ClangTemplightCategory));
 
 static cl::opt<std::string> BlackListFilename("blacklist",
   cl::desc("Use regex expressions in <file> to filter out undesirable traces."),
@@ -181,10 +181,15 @@ static void ParseProgName(SmallVectorImpl<const char *> &ArgVector,
     const char *Suffix;
     const char *ModeFlag;
   } suffixes [] = {
-    { "templight",     "--driver-mode=g++" },
+    { "templight",     nullptr },
+    { "templight++",   "--driver-mode=g++" },
+    { "templight-c++", "--driver-mode=g++" },
+    { "templight-cc",  nullptr },
     { "templight-cpp", "--driver-mode=cpp" },
     { "templight-g++", "--driver-mode=g++" },
+    { "templight-gcc", nullptr },
     { "templight-cl",  "--driver-mode=cl"  },
+    { "cc",        nullptr },
     { "cpp",       "--driver-mode=cpp" },
     { "cl" ,       "--driver-mode=cl"  },
     { "++",        "--driver-mode=g++" },

@@ -46,6 +46,15 @@ else()
   set(templight_binary "${LLVM_RUNTIME_OUTPUT_INTDIR}/templight${CMAKE_EXECUTABLE_SUFFIX}")
 endif()
 
+# Create the templight++ symlink in the build directory.
+set(templight_pp "${LLVM_RUNTIME_OUTPUT_INTDIR}/templight++${CMAKE_EXECUTABLE_SUFFIX}")
+add_custom_command(TARGET templight POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E ${CLANGXX_LINK_OR_COPY} "${templight_binary}" "${templight_pp}"
+    WORKING_DIRECTORY "${LLVM_RUNTIME_OUTPUT_INTDIR}")
+
+set_property(DIRECTORY APPEND
+  PROPERTY ADDITIONAL_MAKE_CLEAN_FILES ${templight_pp})
+
 # Create the templight-cl symlink in the build directory.
 set(templight_cl "${LLVM_RUNTIME_OUTPUT_INTDIR}/templight-cl${CMAKE_EXECUTABLE_SUFFIX}")
 add_custom_command(TARGET templight POST_BUILD

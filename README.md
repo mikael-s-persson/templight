@@ -93,7 +93,7 @@ Templight is designed to be a drop-in replacement for the clang compiler. This i
 Because of this particular situation, the options for templight must be specially marked with `-Xtemplight` to distinguish them from other Clang options. The general usage goes like this:
 
 ```bash
-  $ templight [[-Xtemplight [templight-option]]|[clang-option]] <inputs>
+  $ templight++ [[-Xtemplight [templight-option]]|[clang-option]] <inputs>
 ```
 
 Or, for the MSVC-compatible version of templight (analoguous to clang-cl) use as follows:
@@ -113,12 +113,12 @@ For example, if we have this simple command-line invocation of clang:
 The corresponding templight profiler invocation, with options `-memory` and `-ignore-system` would look like this:
 
 ```bash
-  $ templight -Xtemplight -profiler -Xtemplight -memory -Xtemplight -ignore-system -Wall -c some_source.cpp -o some_source.o
+  $ templight++ -Xtemplight -profiler -Xtemplight -memory -Xtemplight -ignore-system -Wall -c some_source.cpp -o some_source.o
 ```
 
 Note that the order in which the templight-options appear is not important, and that clang options can be interleaved with templight-options. However, **every single templight-option must be immediately preceeded with `-Xtemplight`**.
 
-As can be seen from that simple example, one can easily substitude the clang command (e.g., `clang++`) with a compound templight invocation (e.g., `templight -Xtemplight -profiler -Xtemplight -memory`) and thus, leave the remainder of the command-line intact. That is how templight can be used as a drop-in replacement for clang in any given project, build script or an IDE's build configuration.
+As can be seen from that simple example, one can easily substitude the clang command (e.g., `clang++`) with a compound templight invocation (e.g., `templight++ -Xtemplight -profiler -Xtemplight -memory`) and thus, leave the remainder of the command-line intact. That is how templight can be used as a drop-in replacement for clang in any given project, build script or an IDE's build configuration.
 
 If you use CMake and clang with the following common trick:
 ```bash
@@ -128,7 +128,8 @@ If you use CMake and clang with the following common trick:
 ```
 Then, templight could be swapped in by the same trick:
 ```bash
-  $ export CXX="/path/to/llvm/build/bin/templight -Xtemplight -profiler -Xtemplight -memory"
+  $ export CC="/path/to/llvm/build/bin/templight -Xtemplight -profiler -Xtemplight -memory"
+  $ export CXX="/path/to/llvm/build/bin/templight++ -Xtemplight -profiler -Xtemplight -memory"
   $ cmake <path-to-project-root>
 ```
 But be warned that the **cmake scripts will not recognize this compiler**, and therefore, you will have to make changes in the CMake files to be able to handle it. If anyone is interested in creating some CMake modules to deal with templight, please contact the maintainer, such modules would be more than welcomed.
@@ -139,7 +140,7 @@ The templight profiler is invoked by specifying the templight-option `-profiler`
 
 For example, running the following:
 ```bash
-  $ templight -Xtemplight -profiler -c some_source.cpp
+  $ templight++ -Xtemplight -profiler -c some_source.cpp
 ```
 will produce a file called `some_source.cpp.trace.yaml` in the same directory as `some_source.cpp`.
 
