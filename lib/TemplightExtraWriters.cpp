@@ -238,8 +238,21 @@ void TemplightTextWriter::printEntry(const PrintableTemplightEntryEnd& aEntry) {
 }
 
 
+template <typename T, std::size_t bits = sizeof(T) * 8 - 1>
+struct MaxIntegral;
+
+template <typename T, std::size_t bits>
+struct MaxIntegral {
+    static const T value = ((T)1 << bits) + MaxIntegral<T, bits - 1>::value;
+};
+template <typename T>
+struct MaxIntegral<T, 0> {
+    static const T value = 1;
+};
+
+
 struct EntryTraversalTask {
-  static const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
+  static const std::size_t invalid_id = MaxIntegral<std::size_t>::value;
   
   PrintableTemplightEntryBegin start;
   PrintableTemplightEntryEnd finish;
@@ -252,7 +265,7 @@ struct EntryTraversalTask {
 };
 
 struct RecordedDFSEntryTree {
-  static const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
+  static const std::size_t invalid_id = MaxIntegral<std::size_t>::value;
   
   std::vector<EntryTraversalTask> parent_stack;
   std::size_t cur_top;
