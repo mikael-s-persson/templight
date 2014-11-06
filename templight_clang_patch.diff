@@ -1,6 +1,6 @@
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 220603)
+--- include/clang/FrontendTool/Utils.h	(revision 221465)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
 @@ -18,7 +18,10 @@
  namespace clang {
@@ -159,7 +159,7 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 +
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 220603)
+--- include/clang/Sema/Sema.h	(revision 221465)
 +++ include/clang/Sema/Sema.h	(working copy)
 @@ -31,6 +31,7 @@
  #include "clang/Basic/Specifiers.h"
@@ -177,7 +177,7 @@ Index: include/clang/Sema/Sema.h
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -6163,120 +6165,6 @@
+@@ -6206,120 +6208,6 @@
                                 bool RelativeToPrimary = false,
                                 const FunctionDecl *Pattern = nullptr);
  
@@ -298,7 +298,7 @@ Index: include/clang/Sema/Sema.h
    /// \brief List of active template instantiations.
    ///
    /// This vector is treated as a stack. As one template instantiation
-@@ -6321,6 +6209,14 @@
+@@ -6364,6 +6252,14 @@
    /// to implement it anywhere else.
    ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
  
@@ -418,7 +418,7 @@ Index: include/clang/Sema/TemplateInstObserver.h
 +
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 220603)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 221465)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -31,6 +31,8 @@
  using namespace clang;
@@ -455,7 +455,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 220603)
+--- lib/Parse/ParseAST.cpp	(revision 221465)
 +++ lib/Parse/ParseAST.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/ExternalSemaSource.h"
@@ -573,7 +573,7 @@ Index: lib/Sema/ActiveTemplateInst.cpp
 +
 Index: lib/Sema/CMakeLists.txt
 ===================================================================
---- lib/Sema/CMakeLists.txt	(revision 220603)
+--- lib/Sema/CMakeLists.txt	(revision 221465)
 +++ lib/Sema/CMakeLists.txt	(working copy)
 @@ -3,6 +3,7 @@
    )
@@ -585,7 +585,7 @@ Index: lib/Sema/CMakeLists.txt
    CodeCompleteConsumer.cpp
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 220603)
+--- lib/Sema/Sema.cpp	(revision 221465)
 +++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/ScopeInfo.h"
@@ -597,7 +597,7 @@ Index: lib/Sema/Sema.cpp
  #include "llvm/ADT/SmallSet.h"
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 220603)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 221465)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
@@ -674,7 +674,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
  
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 220603)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 221465)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -22,6 +22,7 @@
  #include "clang/Sema/Lookup.h"
@@ -708,7 +708,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 220603)
+--- lib/Sema/SemaType.cpp	(revision 221465)
 +++ lib/Sema/SemaType.cpp	(working copy)
 @@ -30,6 +30,7 @@
  #include "clang/Sema/Lookup.h"

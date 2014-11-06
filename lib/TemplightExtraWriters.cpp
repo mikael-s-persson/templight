@@ -239,7 +239,7 @@ void TemplightTextWriter::printEntry(const PrintableTemplightEntryEnd& aEntry) {
 
 
 struct EntryTraversalTask {
-  static const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
+  static const std::size_t invalid_id = ~std::size_t(0);
   
   PrintableTemplightEntryBegin start;
   PrintableTemplightEntryEnd finish;
@@ -252,7 +252,7 @@ struct EntryTraversalTask {
 };
 
 struct RecordedDFSEntryTree {
-  static const std::size_t invalid_id = std::numeric_limits<std::size_t>::max();
+  static const std::size_t invalid_id = ~std::size_t(0);
   
   std::vector<EntryTraversalTask> parent_stack;
   std::size_t cur_top;
