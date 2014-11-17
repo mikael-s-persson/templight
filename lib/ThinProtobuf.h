@@ -79,8 +79,10 @@ struct getSIntWire {
 };
 
 inline double loadDouble(StringRef& p_buf) {
-  if ( p_buf.size() < sizeof(double_to_ulong) )
+  if ( p_buf.size() < sizeof(double_to_ulong) ) {
+    p_buf = p_buf.drop_front(p_buf.size());
     return double(0.0);
+  };
   double_to_ulong tmp;
   std::memcpy(reinterpret_cast<char*>(&tmp), p_buf.data(), sizeof(double_to_ulong));
   p_buf = p_buf.drop_front(sizeof(double_to_ulong));
@@ -94,8 +96,10 @@ struct getDoubleWire {
 };
 
 inline float loadFloat(StringRef& p_buf) {
-  if ( p_buf.size() < sizeof(float_to_ulong) )
+  if ( p_buf.size() < sizeof(float_to_ulong) ) {
+    p_buf = p_buf.drop_front(p_buf.size());
     return float(0.0);
+  };
   float_to_ulong tmp;
   std::memcpy(reinterpret_cast<char*>(&tmp), p_buf.data(), sizeof(float_to_ulong));
   p_buf = p_buf.drop_front(sizeof(float_to_ulong));
@@ -123,8 +127,10 @@ struct getBoolWire {
 
 inline std::string loadString(StringRef& p_buf) {
   unsigned int u = loadVarInt(p_buf);
-  if ( p_buf.size() < u )
+  if ( p_buf.size() < u ) {
+    p_buf = p_buf.drop_front(p_buf.size());
     return std::string();
+  };
   std::string s(p_buf.data(), u);
   p_buf = p_buf.drop_front(u);
   return s;  //NRVO
@@ -136,19 +142,29 @@ struct getStringWire {
 };
 
 inline void skipData(StringRef& p_buf, unsigned int wire) {
-  // FIXME: This could be more efficient (not read data).
   switch(wire & 0x7) {
     case 0:
       loadVarInt(p_buf);
       break;
     case 1:
-      loadDouble(p_buf);
+      if ( p_buf.size() < sizeof(double_to_ulong) )
+        p_buf = p_buf.drop_front(p_buf.size());
+      else
+        p_buf = p_buf.drop_front(sizeof(double_to_ulong));
       break;
-    case 2:
-      loadString(p_buf);
+    case 2: {
+      unsigned int u = loadVarInt(p_buf);
+      if ( p_buf.size() < u )
+        p_buf = p_buf.drop_front(p_buf.size());
+      else
+        p_buf = p_buf.drop_front(u);
       break;
+    };
     case 5:
-      loadFloat(p_buf);
+      if ( p_buf.size() < sizeof(float_to_ulong) )
+        p_buf = p_buf.drop_front(p_buf.size());
+      else
+        p_buf = p_buf.drop_front(sizeof(float_to_ulong));
       break;
     default:
       break;
