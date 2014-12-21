@@ -186,7 +186,10 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
   }
   
   // NOTE: Use this function because it produces time since start of process.
-  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_user_time();
+  llvm::sys::TimeValue now(0,0), user(0,0), sys(0,0);
+  llvm::sys::Process::GetTimeUsage(now, user, sys);
+  if(user.seconds() != 0 && user.nanoseconds() != 0)
+    now = user;
   
   Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
@@ -206,7 +209,10 @@ void TemplightTracer::atTemplateEndImpl(const Sema &TheSema,
   Entry.Entity = Inst.Entity;
   
   // NOTE: Use this function because it produces time since start of process.
-  llvm::sys::TimeValue now = llvm::sys::process::get_self()->get_user_time();
+  llvm::sys::TimeValue now(0,0), user(0,0), sys(0,0);
+  llvm::sys::Process::GetTimeUsage(now, user, sys);
+  if(user.seconds() != 0 && user.nanoseconds() != 0)
+    now = user;
   
   Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);

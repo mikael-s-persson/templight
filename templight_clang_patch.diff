@@ -1,6 +1,6 @@
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 222113)
+--- include/clang/FrontendTool/Utils.h	(revision 224687)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
 @@ -18,7 +18,10 @@
  namespace clang {
@@ -159,7 +159,7 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 +
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 222113)
+--- include/clang/Sema/Sema.h	(revision 224687)
 +++ include/clang/Sema/Sema.h	(working copy)
 @@ -31,6 +31,7 @@
  #include "clang/Basic/Specifiers.h"
@@ -177,7 +177,7 @@ Index: include/clang/Sema/Sema.h
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -6253,120 +6255,6 @@
+@@ -6281,120 +6283,6 @@
                                 bool RelativeToPrimary = false,
                                 const FunctionDecl *Pattern = nullptr);
  
@@ -298,7 +298,7 @@ Index: include/clang/Sema/Sema.h
    /// \brief List of active template instantiations.
    ///
    /// This vector is treated as a stack. As one template instantiation
-@@ -6411,6 +6299,14 @@
+@@ -6439,6 +6327,14 @@
    /// to implement it anywhere else.
    ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
  
@@ -418,7 +418,7 @@ Index: include/clang/Sema/TemplateInstObserver.h
 +
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 222113)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 224687)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -31,6 +31,8 @@
  using namespace clang;
@@ -455,7 +455,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 222113)
+--- lib/Parse/ParseAST.cpp	(revision 224687)
 +++ lib/Parse/ParseAST.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/ExternalSemaSource.h"
@@ -477,7 +477,7 @@ Index: lib/Parse/ParseAST.cpp
    ASTConsumer *Consumer = &S.getASTConsumer();
  
    std::unique_ptr<Parser> ParseOP(
-@@ -153,6 +159,14 @@
+@@ -151,6 +157,14 @@
    
    Consumer->HandleTranslationUnit(S.getASTContext());
  
@@ -573,7 +573,7 @@ Index: lib/Sema/ActiveTemplateInst.cpp
 +
 Index: lib/Sema/CMakeLists.txt
 ===================================================================
---- lib/Sema/CMakeLists.txt	(revision 222113)
+--- lib/Sema/CMakeLists.txt	(revision 224687)
 +++ lib/Sema/CMakeLists.txt	(working copy)
 @@ -3,6 +3,7 @@
    )
@@ -585,7 +585,7 @@ Index: lib/Sema/CMakeLists.txt
    CodeCompleteConsumer.cpp
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 222113)
+--- lib/Sema/Sema.cpp	(revision 224687)
 +++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/ScopeInfo.h"
@@ -597,7 +597,7 @@ Index: lib/Sema/Sema.cpp
  #include "llvm/ADT/SmallSet.h"
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 222113)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 224687)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
@@ -652,7 +652,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
      SemaRef.ActiveTemplateInstantiations.pop_back();
      Invalid = true;
    }
-@@ -575,6 +564,9 @@
+@@ -579,6 +568,9 @@
          << cast<FunctionDecl>(Active->Entity)
          << Active->InstantiationRange;
        break;
@@ -662,7 +662,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
      }
    }
  }
-@@ -615,6 +607,9 @@
+@@ -619,6 +611,9 @@
        // or deduced template arguments, so SFINAE applies.
        assert(Active->DeductionInfo && "Missing deduction info pointer");
        return Active->DeductionInfo;
@@ -674,7 +674,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
  
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 222113)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 224687)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -22,6 +22,7 @@
  #include "clang/Sema/Lookup.h"
@@ -708,7 +708,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 222113)
+--- lib/Sema/SemaType.cpp	(revision 224687)
 +++ lib/Sema/SemaType.cpp	(working copy)
 @@ -30,6 +30,7 @@
  #include "clang/Sema/Lookup.h"
@@ -718,7 +718,7 @@ Index: lib/Sema/SemaType.cpp
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
  #include "llvm/Support/ErrorHandling.h"
-@@ -5182,6 +5183,15 @@
+@@ -5185,6 +5186,15 @@
        // Try to recover by implicitly importing this module.
        createImplicitModuleImportForErrorRecovery(Loc, Owner);
      }
