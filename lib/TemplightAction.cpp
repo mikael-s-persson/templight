@@ -55,9 +55,12 @@ std::string TemplightAction::CreateOutputFilename(
   // Should never get executed. 
   if ( CI && result.empty() ) {
     // then, derive output name from the input name:
-    FileID fileID = CI->getSourceManager().getMainFileID();
-    result =
-      CI->getSourceManager().getFileEntryForID(fileID)->getName();
+    if ( CI->hasSourceManager() ) {
+      FileID fileID = CI->getSourceManager().getMainFileID();
+      result = CI->getSourceManager().getFileEntryForID(fileID)->getName();
+    } else { // or, last resort:
+      result = "a";
+    }
   }
   
   std::string postfix;
