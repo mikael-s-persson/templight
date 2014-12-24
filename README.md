@@ -228,11 +228,25 @@ This command can be used to query information about the state of the debugging s
 
 `lookup <identifier>`
 `l <identifier>`
-This command can be used to perform a look-up operation for a given identifier, within the context of the current template instantiation. This will print out the match(es) that the compiler would make to the given identifier. For example, if you are in the instantiation of a member function of an STL container and lookup an identifier like `value_type`, it will point you to the location of that the declaration that the compiler will associate to that identifier in that context (presumably a nested typedef in the STL container class template). If the identifier refers to a compile-time constant value (e.g., integral constant template argument), this command will also print its value.
+`rlookup <regex>`
+`rl <regex>`
+This command can be used to perform a look-up operation for a given identifier or regular expression, within the context of the current template instantiation. This will print out the match(es) that the compiler would make to the given identifier. For example, if you are in the instantiation of a member function of an STL container and lookup an identifier like `value_type`, it will point you to the location of that the declaration that the compiler will associate to that identifier in that context (presumably a nested typedef in the STL container class template).
 
 `typeof <identifier>`
 `t <identifier>`
-This command is similar to `lookup` except that instead of showing you the location of the matching identifier (e.g., showing you a nested typedef or a data member) it will show you its type. If the identifier matches a variable, data member, function, or compile-time constant value, this command will show you the type of that object. If the identifier matches a type, it will show you what the actual type (fully instantiated) is. For example, if it matches a typedef or an alias, then the underlying type that it aliases will be shown (e.g., say you are inside the instantiation of the `std::vector<double>::insert` function and issue `typeof value_type`, it should show you `double` as a result).
+`rtypeof <regex>`
+`rt <regex>`
+This command is similar to `lookup` except that instead of showing you the location of the matching identifier or regular expression (e.g., showing you a nested typedef or a data member) it will show you its type. If the identifier matches a variable, data member, function, or compile-time constant value, this command will show you the type of that object. If the identifier matches a type, it will show you what the actual type (fully instantiated) is. For example, if it matches a typedef or an alias, then the underlying type that it aliases will be shown (e.g., say you are inside the instantiation of the `std::vector<double>::insert` function and issue `typeof value_type`, it should show you `double` as a result).
+
+`eval <identifier>`
+`e <identifier>`
+`reval <regex>`
+`re <regex>`
+This command can be used to perform a look-up and evaluation operation for a given identifier or regular expression, within the context of the current template instantiation. This will print out the compile-time value(s) of the match(es) that the compiler would make to the given identifier. For example, if you are in the instantiation of a member function of an `numeric_limits` and lookup an identifier like `digits`, it will give you the compile-time value of that member.
+
+`setmode verbose`
+`setmode quiet`
+This command can be used to toggle the verbose or quiet modes for the print outs. For example, in quiet mode (default), the location of declarations printed out during lookup or typeof operations will only name the source file and give the line / column numbers, but under verbose mode, it will also print out the corresponding line of source code and an indicator of the point (column) of the declaration (similar to diagnostic message of the compiler).
 
 *Warning*: The templight debugger is still in a *very experimental* phase. You should expect that some of the behaviors mentioned in the above descriptions of the commands will not work as advertized, yet. If you observe any unusual or buggy behaviors, please notify the maintainer and provide an example source file with the sequence of commands that led to the observed behavior.
 

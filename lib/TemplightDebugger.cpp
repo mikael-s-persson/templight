@@ -15,6 +15,7 @@
 #include "clang/AST/DeclTemplate.h"
 #include "clang/Sema/ActiveTemplateInst.h"
 #include "clang/Sema/Sema.h"
+#include "clang/Lex/Lexer.h"
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/Process.h"
@@ -108,8 +109,6 @@ public:
   
   const Sema &TheSema;
   
-  TemplateArgRecorder(const Sema &aSema) : TheSema(aSema) { }
-  
   bool shouldVisitTemplateInstantiations() const { return false; }
   
   struct PrintableQueryResult {
@@ -117,34 +116,62 @@ public:
     std::string FileName;
     int Line;
     int Column;
+    std::string SrcPointer;
     
     void nullLocation(const std::string& NullName = "<no-file>") {
       FileName = NullName;
       Line = 0;
       Column = 0;
+      SrcPointer = "";
     }
     
-    void fromLocation(PresumedLoc PLoc, const std::string& NullName = "") {
+    void fromLocation(const Sema &TheSema, SourceLocation SLoc, const std::string& NullName = "") {
+      PresumedLoc PLoc = TheSema.getSourceManager().getPresumedLoc(SLoc);
+      
       if(!PLoc.isInvalid()) {
         FileName = PLoc.getFilename();
         Line = PLoc.getLine();
         Column = PLoc.getColumn();
+        
+        FileID fid = TheSema.getSourceManager().getFileID(SLoc);
+        SrcPointer = Lexer::getSourceText(
+          CharSourceRange::getTokenRange(
+            TheSema.getSourceManager().translateLineCol(fid, PLoc.getLine(), 1),
+            TheSema.getSourceManager().translateLineCol(fid, PLoc.getLine(), 256)
+          ), TheSema.getSourceManager(), TheSema.getLangOpts()).str();
+        SrcPointer.push_back('\n');
+        SrcPointer.append(PLoc.getColumn()-1, ' ');
+        SrcPointer.push_back('^');
+        
       } else {
         FileName = NullName;
         Line = 0;
         Column = 0;
+        SrcPointer = "";
       }
     }
+    
   };
   
   
-  std::string QueryName;
-  bool lookForType;
+  llvm::Regex QueryReg;
+  
+  enum LookupKind {
+    LookForType,
+    LookForDecl,
+    LookForValue
+  };
+  
+  LookupKind QueryKind;
   std::vector< PrintableQueryResult > QueryResults;
   // MAYBE change (or add) with Decl* or QualType, etc..
   
+  TemplateArgRecorder(const Sema &aSema, const std::string& aReg, LookupKind aKind = LookForType) : 
+    TheSema(aSema), QueryReg(aReg), QueryKind(aKind) { }
+  
+  
   void RegisterQualTypeQueryResult(PrintableQueryResult& cur_result, QualType q_type) {
-    if( lookForType ) {
+    if( QueryKind == LookForType ) {
       if(const Type* tp = q_type.getTypePtr())
         q_type = tp->getCanonicalTypeInternal();
     }
@@ -155,7 +182,7 @@ public:
         sl = cxx_decl->getLocation();
       }
     }
-    cur_result.fromLocation(TheSema.getSourceManager().getPresumedLoc(sl), "<unknown-location>");
+    cur_result.fromLocation(TheSema, sl, "<unknown-location>");
   };
   
   void LookupInParamArgLists(const TemplateParameterList *Params,
@@ -173,99 +200,116 @@ public:
         OS_param.str();
       }
       
-      if(param_name == QueryName) {
+      if(QueryReg.match(param_name)) {
         
         PrintableQueryResult cur_result;
         
-        switch (Args[I].getKind()) {
-          case TemplateArgument::Null: {
-            // not much better to do.
-            llvm::raw_string_ostream OS_arg(cur_result.Name);
-            Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
-            OS_arg.str(); // flush to string.
-            cur_result.nullLocation();
-            break;
-          }
-          
-          case TemplateArgument::Integral: {
-            if( !lookForType ) {
-              cur_result.Name = Args[I].getAsIntegral().toString(10);
-              cur_result.nullLocation();
-            } else {
-              RegisterQualTypeQueryResult(cur_result, Args[I].getIntegralType());
-            }
-            break;
-          }
-          
-          case TemplateArgument::NullPtr: {
-            if( !lookForType ) {
-              cur_result.Name = "nullptr";
-              cur_result.nullLocation();
-            } else {
-              cur_result.Name = Args[I].getNullPtrType().getAsString(TheSema.getLangOpts());
-              cur_result.nullLocation();
-            }
-            break;
-          }
-          
-          case TemplateArgument::Declaration: {
-            ValueDecl* vdecl = Args[I].getAsDecl();
-            if( !lookForType ) {
+        if( QueryKind == LookForDecl ) {
+          cur_result.Name = Params->getParam(I)->getName();
+          cur_result.fromLocation(TheSema, Params->getParam(I)->getLocation(), "<unknown-location>");
+        } else {
+          switch (Args[I].getKind()) {
+            case TemplateArgument::Null: {
+              // not much better to do.
               llvm::raw_string_ostream OS_arg(cur_result.Name);
-              vdecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
+              Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
               OS_arg.str(); // flush to string.
-              cur_result.fromLocation(
-                TheSema.getSourceManager().getPresumedLoc(vdecl->getLocation()), 
-                "<unknown-location>");
-            } else {
-              RegisterQualTypeQueryResult(cur_result, vdecl->getType());
+              cur_result.nullLocation();
+              break;
             }
-            break;
-          }
-          
-          case TemplateArgument::Type: {
-            RegisterQualTypeQueryResult(cur_result, Args[I].getAsType());
-            break;
-          }
-          
-          case TemplateArgument::Template:
-          case TemplateArgument::TemplateExpansion: {
-            llvm::raw_string_ostream OS_arg(cur_result.Name);
-            TemplateName tname = Args[I].getAsTemplateOrTemplatePattern();
-            tname.print(OS_arg, TheSema.getLangOpts());
-            OS_arg.str(); // flush to string.
-            SourceLocation sl;
-            if(TemplateDecl* tmp_decl = tname.getAsTemplateDecl()) {
-              sl = tmp_decl->getLocation();
+            
+            case TemplateArgument::Integral: {
+              if( QueryKind == LookForValue ) {
+                cur_result.Name = Args[I].getAsIntegral().toString(10);
+                cur_result.nullLocation();
+              } else {
+                RegisterQualTypeQueryResult(cur_result, Args[I].getIntegralType());
+              }
+              break;
             }
-            cur_result.fromLocation(TheSema.getSourceManager().getPresumedLoc(sl), 
-                                    "<unknown-location>");
-            break;
-          }
-          
-          case TemplateArgument::Expression: {
-            if( !lookForType ) {
+            
+            case TemplateArgument::NullPtr: {
+              if( QueryKind == LookForValue ) {
+                cur_result.Name = "nullptr";
+                cur_result.nullLocation();
+              } else {
+                cur_result.Name = Args[I].getNullPtrType().getAsString(TheSema.getLangOpts());
+                cur_result.nullLocation();
+              }
+              break;
+            }
+            
+            case TemplateArgument::Declaration: {
+              ValueDecl* vdecl = Args[I].getAsDecl();
+              if( QueryKind == LookForValue ) {
+                // Attempt to print out the constant-expression value of the declaration:
+                //  the meaningful ValueDecl would be NonTypeTemplateParmDecl, VarDecl, EnumConstantDecl, and maybe FunctionDecl
+                if( VarDecl* vardecl = dyn_cast<VarDecl>(vdecl) ) {
+                  if( APValue* valptr =  vardecl->evaluateValue() ) {
+                    llvm::raw_string_ostream OS_arg(cur_result.Name);
+                    valptr->dump(OS_arg);
+                    OS_arg.str(); // flush to string.
+                    cur_result.nullLocation();
+                  } else {
+                    cur_result.Name = "<could not evaluate>";
+                    cur_result.nullLocation();
+                  }
+                } else {
+                  llvm::raw_string_ostream OS_arg(cur_result.Name);
+                  vdecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
+                  OS_arg.str(); // flush to string.
+                  cur_result.fromLocation(TheSema, vdecl->getLocation(), "<unknown-location>");
+                }
+              } else {
+                RegisterQualTypeQueryResult(cur_result, vdecl->getType());
+              }
+              break;
+            }
+            
+            case TemplateArgument::Type: {
+              RegisterQualTypeQueryResult(cur_result, Args[I].getAsType());
+              break;
+            }
+            
+            case TemplateArgument::Template:
+            case TemplateArgument::TemplateExpansion: {
               llvm::raw_string_ostream OS_arg(cur_result.Name);
-              Args[I].getAsExpr()->printPretty(OS_arg, NULL, TheSema.getLangOpts());
+              TemplateName tname = Args[I].getAsTemplateOrTemplatePattern();
+              tname.print(OS_arg, TheSema.getLangOpts());
               OS_arg.str(); // flush to string.
-              cur_result.fromLocation(
-                TheSema.getSourceManager().getPresumedLoc(Args[I].getAsExpr()->getExprLoc()), 
-                "<unknown-location>");
-            } else {
-              RegisterQualTypeQueryResult(cur_result, Args[I].getAsExpr()->getType());
+              SourceLocation sl;
+              if(TemplateDecl* tmp_decl = tname.getAsTemplateDecl()) {
+                sl = tmp_decl->getLocation();
+              }
+              cur_result.fromLocation(TheSema, sl, "<unknown-location>");
+              break;
             }
-            break;
+            
+            case TemplateArgument::Expression: {
+              if( QueryKind == LookForValue ) {
+                // TODO Evaluate the expression to get the value printed.
+                llvm::raw_string_ostream OS_arg(cur_result.Name);
+                Args[I].getAsExpr()->printPretty(OS_arg, NULL, TheSema.getLangOpts());
+                OS_arg.str(); // flush to string.
+                cur_result.fromLocation(
+                  TheSema, Args[I].getAsExpr()->getExprLoc(), 
+                  "<unknown-location>");
+              } else {
+                RegisterQualTypeQueryResult(cur_result, Args[I].getAsExpr()->getType());
+              }
+              break;
+            }
+            
+            case TemplateArgument::Pack: {
+              // not much better to do.
+              llvm::raw_string_ostream OS_arg(cur_result.Name);
+              Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
+              OS_arg.str(); // flush to string.
+              cur_result.nullLocation();
+              break;
+            }
+            
           }
-          
-          case TemplateArgument::Pack: {
-            // not much better to do.
-            llvm::raw_string_ostream OS_arg(cur_result.Name);
-            Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
-            OS_arg.str(); // flush to string.
-            cur_result.nullLocation();
-            break;
-          }
-          
         }
         
         QueryResults.push_back(cur_result);
@@ -279,19 +323,17 @@ public:
     while(cur_decl) {
       for(DeclContext::all_lookups_iterator it = cur_decl->lookups_begin(), 
           it_end = cur_decl->lookups_end(); it != it_end; ++it) {
-        if(it.getLookupName().getAsString() == QueryName) {
+        if(QueryReg.match(it.getLookupName().getAsString())) {
           for(DeclContext::lookup_result::iterator ri = (*it).begin(), 
               ri_end = (*it).end(); ri != ri_end; ++ri) {
             NamedDecl* ndecl = *ri;
             PrintableQueryResult cur_result;
-            if( !lookForType ) {
+            if( QueryKind == LookForDecl ) {
               if( ndecl ) {
                 llvm::raw_string_ostream OS_arg(cur_result.Name);
                 ndecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
                 OS_arg.str(); // flush to string.
-                cur_result.fromLocation(
-                  TheSema.getSourceManager().getPresumedLoc(ndecl->getLocation()), 
-                  "<unknown-location>");
+                cur_result.fromLocation(TheSema, ndecl->getLocation(), "<unknown-location>");
               }
             } else {
               if(TypeDecl* tdecl = dyn_cast<TypeDecl>(ndecl)) {
@@ -302,7 +344,28 @@ public:
                 }
               } else
               if(ValueDecl* vdecl = dyn_cast<ValueDecl>(ndecl)) {
-                RegisterQualTypeQueryResult(cur_result, vdecl->getType());
+                if( QueryKind == LookForValue ) {
+                  // Attempt to print out the constant-expression value of the declaration:
+                  //  the meaningful ValueDecl would be NonTypeTemplateParmDecl, VarDecl, EnumConstantDecl, and maybe FunctionDecl
+                  if( VarDecl* vardecl = dyn_cast<VarDecl>(vdecl) ) {
+                    if( APValue* valptr =  vardecl->evaluateValue() ) {
+                      llvm::raw_string_ostream OS_arg(cur_result.Name);
+                      valptr->dump(OS_arg);
+                      OS_arg.str(); // flush to string.
+                      cur_result.nullLocation();
+                    } else {
+                      cur_result.Name = "<could not evaluate>";
+                      cur_result.nullLocation();
+                    }
+                  } else {
+                    llvm::raw_string_ostream OS_arg(cur_result.Name);
+                    vdecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
+                    OS_arg.str(); // flush to string.
+                    cur_result.fromLocation(TheSema, vdecl->getLocation(), "<unknown-location>");
+                  }
+                } else {
+                  RegisterQualTypeQueryResult(cur_result, vdecl->getType());
+                }
               }
             }
             QueryResults.push_back(cur_result);
@@ -405,7 +468,6 @@ public:
 
 
 
-
 class TemplightDebugger::InteractiveAgent {
 public:
   
@@ -425,13 +487,21 @@ public:
     CurrentSkippedEntry = Entry;
   };
   
+  struct breakpointMatchesStr {
+    llvm::StringRef str;
+    breakpointMatchesStr(const std::string& aStr) : str(&aStr[0], aStr.size()) { };
+    bool operator()(std::pair<std::string,llvm::Regex>& aReg) const {
+      return aReg.second.match(str);
+    };
+  };
+  
   bool shouldIgnoreEntry(const TemplateDebuggerEntry &Entry) {
     // Check if it's been commanded to ignore things:
     if ( ignoreAll )
       return true;
     if ( ignoreUntilBreakpoint ) {
-      std::vector< std::string >::const_iterator it = std::find(
-        Breakpoints.begin(), Breakpoints.end(), Entry.Name);
+      std::vector< std::pair<std::string,llvm::Regex> >::iterator it = std::find_if(
+        Breakpoints.begin(), Breakpoints.end(), breakpointMatchesStr(Entry.Name));
       if ( it != Breakpoints.end() )
         return false;
       else
@@ -561,9 +631,9 @@ public:
         else if ( ( com_arg == "b" ) ||
                   ( com_arg == "break" ) ) {
           for(unsigned i = 0; i < Breakpoints.size(); ++i)
-            if ( Breakpoints[i] != "-" )
+            if ( !Breakpoints[i].second.match("-") )
               llvm::outs() << "Breakpoint " << i 
-                           << " for " << Breakpoints[i] << '\n';
+                           << " for " << Breakpoints[i].first << '\n';
           continue;
         }
         else if ( ( com_arg == "s" ) ||
@@ -575,6 +645,21 @@ public:
           continue;
         }
         
+      }
+      
+      if ( user_command == "setmode" ) {
+        if ( com_arg == "verbose" ) {
+          verboseMode = true;
+          continue;
+        }
+        else if ( com_arg == "quiet" ) {
+          verboseMode = false;
+          continue;
+        }
+        else {
+          llvm::outs() << "Invalid setmode command!\n";
+          continue;
+        }
       }
       
       if ( ( user_command == "r" ) ||
@@ -611,43 +696,112 @@ public:
       }
       else if ( ( user_command == "l" ) ||
                 ( user_command == "lookup" ) ) {
-        TemplateArgRecorder rec(TheSema);
-        rec.QueryName = com_arg;
-        rec.lookForType = false;
+        TemplateArgRecorder rec(TheSema, "^" + llvm::Regex::escape(com_arg) + "$", 
+                                TemplateArgRecorder::LookForDecl);
         rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() 
             << "Found " << it->Name << '\n'
             << "  at " << it->FileName << '|' << it->Line << '|' << it->Column << '\n';
+          if( verboseMode && !it->SrcPointer.empty() )
+            llvm::outs() << it->SrcPointer << '\n';
+        };
+        continue;
+      }
+      else if ( ( user_command == "rl" ) ||
+                ( user_command == "rlookup" ) ) {
+        TemplateArgRecorder rec(TheSema, com_arg, TemplateArgRecorder::LookForDecl);
+        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
+            it != rec.QueryResults.end(); ++it) {
+          llvm::outs() 
+            << "Found " << it->Name << '\n'
+            << "  at " << it->FileName << '|' << it->Line << '|' << it->Column << '\n';
+          if( verboseMode && !it->SrcPointer.empty() )
+            llvm::outs() << it->SrcPointer << '\n';
         };
         continue;
       }
       else if ( ( user_command == "t" ) ||
                 ( user_command == "typeof" ) ) {
-        TemplateArgRecorder rec(TheSema);
-        rec.QueryName = com_arg;
-        rec.lookForType = true;
+        TemplateArgRecorder rec(TheSema, "^" + llvm::Regex::escape(com_arg) + "$",
+                                TemplateArgRecorder::LookForType);
         rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() 
             << "Found " << it->Name << '\n'
             << "  at " << it->FileName << '|' << it->Line << '|' << it->Column << '\n';
+          if( verboseMode && !it->SrcPointer.empty() )
+            llvm::outs() << it->SrcPointer << '\n';
+        };
+        continue;
+      }
+      else if ( ( user_command == "rt" ) ||
+                ( user_command == "rtypeof" ) ) {
+        TemplateArgRecorder rec(TheSema, com_arg, TemplateArgRecorder::LookForType);
+        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
+            it != rec.QueryResults.end(); ++it) {
+          llvm::outs() 
+            << "Found " << it->Name << '\n'
+            << "  at " << it->FileName << '|' << it->Line << '|' << it->Column << '\n';
+          if( verboseMode && !it->SrcPointer.empty() )
+            llvm::outs() << it->SrcPointer << '\n';
+        };
+        continue;
+      }
+      else if ( ( user_command == "e" ) ||
+                ( user_command == "eval" ) ) {
+        TemplateArgRecorder rec(TheSema, "^" + llvm::Regex::escape(com_arg) + "$", 
+                                TemplateArgRecorder::LookForValue);
+        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
+            it != rec.QueryResults.end(); ++it) {
+          llvm::outs() << it->Name << '\n';
+        };
+        continue;
+      }
+      else if ( ( user_command == "re" ) ||
+                ( user_command == "reval" ) ) {
+        TemplateArgRecorder rec(TheSema, com_arg, TemplateArgRecorder::LookForValue);
+        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
+            it != rec.QueryResults.end(); ++it) {
+          llvm::outs() << it->Name << '\n';
         };
         continue;
       }
       else if ( ( user_command == "b" ) ||
                 ( user_command == "break" ) ) {
-        std::vector< std::string >::iterator it = std::find(
-          Breakpoints.begin(), Breakpoints.end(), com_arg);
+        std::vector< std::pair<std::string,llvm::Regex> >::iterator it = std::find_if(
+          Breakpoints.begin(), Breakpoints.end(), breakpointMatchesStr(com_arg));
         if ( it == Breakpoints.end() ) {
-          it = std::find(Breakpoints.begin(), Breakpoints.end(), "-");
+          it = std::find_if(Breakpoints.begin(), Breakpoints.end(), breakpointMatchesStr("-"));
           if ( it == Breakpoints.end() )
-            it = Breakpoints.insert(Breakpoints.end(), com_arg);
+            it = Breakpoints.insert(Breakpoints.end(), 
+                                    std::pair<std::string,llvm::Regex>(llvm::Regex::escape(com_arg), 
+                                                                       llvm::Regex(llvm::Regex::escape(com_arg))));
           else
-            *it = com_arg;
+            *it = std::pair<std::string,llvm::Regex>(llvm::Regex::escape(com_arg), 
+                                                     llvm::Regex(llvm::Regex::escape(com_arg)));
         }
+        llvm::outs() << "Breakpoint " << (it - Breakpoints.begin()) 
+                     << " for " << com_arg << '\n';
+        continue;
+      }
+      else if ( ( user_command == "rb" ) ||
+                ( user_command == "rbreak" ) ) {
+        std::vector< std::pair<std::string,llvm::Regex> >::iterator it = 
+          std::find_if(Breakpoints.begin(), Breakpoints.end(), breakpointMatchesStr("-"));
+        if ( it == Breakpoints.end() )
+          it = Breakpoints.insert(Breakpoints.end(), 
+                                  std::pair<std::string,llvm::Regex>(com_arg, 
+                                                                     llvm::Regex(com_arg)));
+        else
+          *it = std::pair<std::string,llvm::Regex>(com_arg, 
+                                                   llvm::Regex(com_arg));
         llvm::outs() << "Breakpoint " << (it - Breakpoints.begin()) 
                      << " for " << com_arg << '\n';
         continue;
@@ -660,8 +814,8 @@ public:
           continue;
         }
         llvm::outs() << "Deleted breakpoint " << ind 
-                     << " for " << Breakpoints[ind] << '\n';
-        Breakpoints[ind] = "-";
+                     << " for " << Breakpoints[ind].first << '\n';
+        Breakpoints[ind] = std::pair<std::string,llvm::Regex>("-", llvm::Regex("^-$"));
         continue;
       }
       else if ( ( user_command == "bt" ) ||
@@ -720,7 +874,7 @@ public:
   };
   
   InteractiveAgent(const Sema &aTheSema) : TheSema(aTheSema), ignoreAll(false), 
-    ignoreUntilLastEnds(false), ignoreUntilBreakpoint(false) {
+    ignoreUntilLastEnds(false), ignoreUntilBreakpoint(false), verboseMode(false) {
     CurrentSkippedEntry.IsTemplateBegin = false;
   };
   
@@ -731,7 +885,7 @@ public:
   std::vector<TemplateDebuggerEntry> EntriesStack;
   TemplateDebuggerEntry LastBeginEntry;
   
-  std::vector< std::string > Breakpoints;
+  std::vector< std::pair<std::string,llvm::Regex> > Breakpoints;
   
   std::string LastUserCommand;
   
@@ -742,6 +896,7 @@ public:
   unsigned ignoreAll : 1;
   unsigned ignoreUntilLastEnds : 1;
   unsigned ignoreUntilBreakpoint : 1;
+  unsigned verboseMode : 1;
 };
 
 
