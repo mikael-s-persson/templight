@@ -197,7 +197,9 @@ Here is a quick reference for the available commands:
 
 `break <template name>`
 `b <template name>`
-This command can be used to create a break-point at the instantiation (or any related actions, such as argument deductions) of the given template class or function. If the base name of the template is used, like `my_class`, then the compilation will be interrupted at any instantiation in which that base name appears. If an specialization for the template is used, like `my_class<double>`, then the compilation will be interrupted only when this specialization is encountered or instantiated.
+`rbreak <regex>`
+`rb <regex>`
+This command can be used to create a break-point at the instantiation (or any related actions, such as argument deductions) of the given template class or function, or any regular expression that matches with the instantiations that occur. If the base name of the template is used, like `my_class`, then the compilation will be interrupted at any instantiation in which that base name appears. If an specialization for the template is used, like `my_class<double>`, then the compilation will be interrupted only when this specialization is encountered or instantiated.
 
 `delete <breakpoint index>`
 `d <breakpoint index>`
