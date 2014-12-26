@@ -80,6 +80,20 @@ struct TemplateDebuggerEntry {
   };
 };
 
+static std::string getSrcPointer(const Sema& TheSema, SourceLocation SLoc) {
+  PresumedLoc PLoc = TheSema.getSourceManager().getPresumedLoc(SLoc);
+  FileID fid = TheSema.getSourceManager().getFileID(SLoc);
+  std::string SrcPointer = Lexer::getSourceText(
+    CharSourceRange::getTokenRange(
+      TheSema.getSourceManager().translateLineCol(fid, PLoc.getLine(), 1),
+      TheSema.getSourceManager().translateLineCol(fid, PLoc.getLine(), 256)
+    ), TheSema.getSourceManager(), TheSema.getLangOpts()).str();
+  SrcPointer.push_back('\n');
+  SrcPointer.append(PLoc.getColumn()-1, ' ');
+  SrcPointer.push_back('^');
+  return SrcPointer;
+}
+
 
 template <typename OutputIter>
 void fillWithTemplateArgumentPrints(const TemplateArgument *Args,
@@ -477,6 +491,11 @@ public:
       << InstantiationKindStrings[Entry.Inst.Kind]  << " of " << Entry.Name << '\n'
       << "  at " << Entry.FileName << '|' << Entry.Line << '|' << Entry.Column 
       << " (Memory usage: " << Entry.MemoryUsage << ")\n";
+    if ( verboseMode ) {
+      std::string SrcPointer = getSrcPointer(TheSema, Entry.Inst.PointOfInstantiation);
+      if( !SrcPointer.empty() )
+        llvm::outs() << SrcPointer << '\n';
+    }
   };
   
   void skipEntry(const TemplateDebuggerEntry &Entry) {
