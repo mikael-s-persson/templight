@@ -511,6 +511,8 @@ int main(int argc_, const char **argv_) {
         (strcmp(argv[i], "-Xtemplight") == 0)) {
       while( i < size - 1 && argv[++i] == nullptr ) /* skip EOLs */ ;
       templight_argv.push_back(argv[i]);   // the word after -Xtemplight
+      if( i == size - 1 ) // was this the last argument?
+        break;
       while( i < size - 1 && argv[++i] == nullptr ) /* skip EOLs */ ;
     } else {
       if ((argv[i] != nullptr) && (strcmp(argv[i], "-help") == 0)) {
