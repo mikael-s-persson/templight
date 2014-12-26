@@ -195,59 +195,65 @@ The templight debugger is invoked by specifying the templight-option `-debugger`
 
 Here is a quick reference for the available commands:
 
-`break <template name>`
-`b <template name>`
-`rbreak <regex>`
-`rb <regex>`
+`break <template name>` |
+`b <template name>` |
+`rbreak <regex>` |
+`rb <regex>`:
 This command can be used to create a break-point at the instantiation (or any related actions, such as argument deductions) of the given template class or function, or any regular expression that matches with the instantiations that occur. If the base name of the template is used, like `my_class`, then the compilation will be interrupted at any instantiation in which that base name appears. If an specialization for the template is used, like `my_class<double>`, then the compilation will be interrupted only when this specialization is encountered or instantiated.
 
-`delete <breakpoint index>`
-`d <breakpoint index>`
+`delete <breakpoint index>` |
+`d <breakpoint index>`:
 This command can be used to delete a break-point that was previously created with the `break` command. Each break-point is assigned an index number upon creation, and this index number should be used to remove that break-point. Use the `info break` (or `i b`) command to print the list of existing break-points so that the break-point index number can be retrieved, if forgotten.
 
-`run` / `r`
-`continue` / `c`
+`run` | `r` |
+`continue` | `c`
 This command (in either forms or their short-hands) will resume compilation until the next break-point is encountered.
 
-`kill` / `k`
-`quit` / `q`
+`kill` | `k` |
+`quit` | `q`:
 This command (in either forms or their short-hands) will resume compilation until the end, ignoring all break-points. In other words, this means "finish the compilation without debugging".
 
-`step` / `s`
+`step` | `s`:
 This command will step into the template instantiation, meaning that it will resume compilation until the next nested (or dependent) template is instantiated. For example, when instantiating a function template definition, function templates or class templates used inside the body of that function will be instantiated as part of it, and the `step` command allows you to step into those nested instantiations.
 
-`next` / `n`
+`next` | `n`:
 This command will skip to the end of the current template instantiation, and thus, skipping all nested template instantiations. The debugger will interrupt only when leaving the current instantiation context, or if a break-point is encountered within the nested template instantiations.
 
-`where` / `backtrace` / `bt`
+`where` | `backtrace` | `bt`:
 This command can be used to print the current stack of nested template instantiations.
 
-`info <kind>` / `i <kind>`
+`info <kind>` | `i <kind>`:
 This command can be used to query information about the state of the debugging session. The `<kind>` specifies one of the following options:
- - `frame` / `f`: Prints the information about the current template instantiation that the debugger is currently interrupted at.
- - `break` / `b`: Prints the list of all existing break-points.
- - `stack` / `s`: This is equivalent to calling `where` / `backtrace` / `bt` directly.
+ - `frame` | `f`: Prints the information about the current template instantiation that the debugger is currently interrupted at.
+ - `break` | `b`: Prints the list of all existing break-points.
+ - `stack` | `s`: This is equivalent to calling `where` | `backtrace` | `bt` directly.
 
-`lookup <identifier>`
-`l <identifier>`
-`rlookup <regex>`
-`rl <regex>`
+`lookup <identifier>` |
+`l <identifier>` |
+`rlookup <regex>` |
+`rl <regex>`:
 This command can be used to perform a look-up operation for a given identifier or regular expression, within the context of the current template instantiation. This will print out the match(es) that the compiler would make to the given identifier. For example, if you are in the instantiation of a member function of an STL container and lookup an identifier like `value_type`, it will point you to the location of that the declaration that the compiler will associate to that identifier in that context (presumably a nested typedef in the STL container class template).
 
-`typeof <identifier>`
-`t <identifier>`
-`rtypeof <regex>`
-`rt <regex>`
+`typeof <identifier>` |
+`t <identifier>` |
+`rtypeof <regex>` |
+`rt <regex>`:
 This command is similar to `lookup` except that instead of showing you the location of the matching identifier or regular expression (e.g., showing you a nested typedef or a data member) it will show you its type. If the identifier matches a variable, data member, function, or compile-time constant value, this command will show you the type of that object. If the identifier matches a type, it will show you what the actual type (fully instantiated) is. For example, if it matches a typedef or an alias, then the underlying type that it aliases will be shown (e.g., say you are inside the instantiation of the `std::vector<double>::insert` function and issue `typeof value_type`, it should show you `double` as a result).
 
-`eval <identifier>`
-`e <identifier>`
-`reval <regex>`
-`re <regex>`
+`eval <identifier>` |
+`e <identifier>` |
+`reval <regex>` |
+`re <regex>`:
 This command can be used to perform a look-up and evaluation operation for a given identifier or regular expression, within the context of the current template instantiation. This will print out the compile-time value(s) of the match(es) that the compiler would make to the given identifier. For example, if you are in the instantiation of a member function of an `numeric_limits` and lookup an identifier like `digits`, it will give you the compile-time value of that member.
 
-`setmode verbose`
-`setmode quiet`
+`whois <identifier>` |
+`w <identifier>` |
+`rwhois <regex>` |
+`rw <regex>`:
+This command can be used to perform the equivalent of `lookup`, `eval` and `typeof` operations all at once for a given identifier or regular expression, within the context of the current template instantiation. This will print out the match(es) that the compiler would make to the given identifier and the message will contain the identifier that the look-up resolves to, its value (if any) and its canonical type, and will point to the location of the *identifier*. This command is mostly provided as a convenient all-in-one option for manual debugging using this debugger, and thus, provides more "human-readable" messages for various situations. The output of the other three fundamental commands (lookup, eval and typeof) are structured for providing all information in a way that is easy to parse by, for example, a graphical front-end for the debugger.
+
+`setmode verbose` |
+`setmode quiet`:
 This command can be used to toggle the verbose or quiet modes for the print outs. For example, in quiet mode (default), the location of declarations printed out during lookup or typeof operations will only name the source file and give the line / column numbers, but under verbose mode, it will also print out the corresponding line of source code and an indicator of the point (column) of the declaration (similar to diagnostic message of the compiler).
 
 *Warning*: The templight debugger is still in a *very experimental* phase. You should expect that some of the behaviors mentioned in the above descriptions of the commands will not work as advertized, yet. If you observe any unusual or buggy behaviors, please notify the maintainer and provide an example source file with the sequence of commands that led to the observed behavior.

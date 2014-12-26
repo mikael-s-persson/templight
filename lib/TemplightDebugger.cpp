@@ -132,6 +132,8 @@ public:
     int Column;
     std::string SrcPointer;
     
+    PrintableQueryResult() : Name(""), FileName("<no-file>"), Line(0), Column(0), SrcPointer("") { }
+    
     void nullLocation(const std::string& NullName = "<no-file>") {
       FileName = NullName;
       Line = 0;
@@ -171,32 +173,32 @@ public:
   llvm::Regex QueryReg;
   
   enum LookupKind {
-    LookForType,
-    LookForDecl,
-    LookForValue
+    LookForDecl = 1,
+    LookForType = 2,
+    LookForValue = 4
   };
   
-  LookupKind QueryKind;
+  int QueryKind;
   std::vector< PrintableQueryResult > QueryResults;
   // MAYBE change (or add) with Decl* or QualType, etc..
   
-  TemplateArgRecorder(const Sema &aSema, const std::string& aReg, LookupKind aKind = LookForType) : 
+  TemplateArgRecorder(const Sema &aSema, const std::string& aReg, int aKind = LookForDecl) : 
     TheSema(aSema), QueryReg(aReg), QueryKind(aKind) { }
   
   
   void RegisterQualTypeQueryResult(PrintableQueryResult& cur_result, QualType q_type) {
-    if( QueryKind == LookForType ) {
-      if(const Type* tp = q_type.getTypePtr())
-        q_type = tp->getCanonicalTypeInternal();
-    }
-    cur_result.Name = q_type.getAsString(TheSema.getLangOpts());
-    SourceLocation sl;
-    if(const Type* tp = q_type.getTypePtr()) {
-      if(const CXXRecordDecl* cxx_decl = tp->getAsCXXRecordDecl()) {
-        sl = cxx_decl->getLocation();
+    if( QueryKind & LookForType )
+      q_type = q_type.getCanonicalType();
+    cur_result.Name += q_type.getAsString(TheSema.getLangOpts());
+    if( cur_result.Line < 1 ) {
+      SourceLocation sl;
+      if(const Type* tp = q_type.getTypePtr()) {
+        if(const CXXRecordDecl* cxx_decl = tp->getAsCXXRecordDecl()) {
+          sl = cxx_decl->getLocation();
+        }
       }
+      cur_result.fromLocation(TheSema, sl, "<unknown-location>");
     }
-    cur_result.fromLocation(TheSema, sl, "<unknown-location>");
   };
   
   void LookupInParamArgLists(const TemplateParameterList *Params,
@@ -218,75 +220,94 @@ public:
         
         PrintableQueryResult cur_result;
         
-        if( QueryKind == LookForDecl ) {
+        if( QueryKind & LookForDecl ) {
           cur_result.Name = Params->getParam(I)->getName();
           cur_result.fromLocation(TheSema, Params->getParam(I)->getLocation(), "<unknown-location>");
-        } else {
+        } 
+        
+        if( QueryKind != LookForDecl ) { // not (only) look-for-decl 
           switch (Args[I].getKind()) {
             case TemplateArgument::Null: {
               // not much better to do.
+              if( !cur_result.Name.empty() )
+                cur_result.Name += " with value ";
+              cur_result.Name += "<empty>";
               llvm::raw_string_ostream OS_arg(cur_result.Name);
               Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
               OS_arg.str(); // flush to string.
-              cur_result.nullLocation();
               break;
             }
             
             case TemplateArgument::Integral: {
-              if( QueryKind == LookForValue ) {
-                cur_result.Name = Args[I].getAsIntegral().toString(10);
-                cur_result.nullLocation();
-              } else {
+              if( QueryKind & LookForValue ) {
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " with value ";
+                cur_result.Name += Args[I].getAsIntegral().toString(10);
+              } 
+              if( QueryKind & LookForType ) {
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " of type ";
                 RegisterQualTypeQueryResult(cur_result, Args[I].getIntegralType());
               }
               break;
             }
             
             case TemplateArgument::NullPtr: {
-              if( QueryKind == LookForValue ) {
-                cur_result.Name = "nullptr";
-                cur_result.nullLocation();
-              } else {
-                cur_result.Name = Args[I].getNullPtrType().getAsString(TheSema.getLangOpts());
-                cur_result.nullLocation();
+              if( QueryKind & LookForValue ) {
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " with value ";
+                cur_result.Name += "nullptr";
+              }
+              if( QueryKind & LookForType ) {
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " of type ";
+                cur_result.Name += Args[I].getNullPtrType().getAsString(TheSema.getLangOpts());
               }
               break;
             }
             
             case TemplateArgument::Declaration: {
               ValueDecl* vdecl = Args[I].getAsDecl();
-              if( QueryKind == LookForValue ) {
+              if( QueryKind & LookForValue ) {
                 // Attempt to print out the constant-expression value of the declaration:
                 //  the meaningful ValueDecl would be NonTypeTemplateParmDecl, VarDecl, EnumConstantDecl, and maybe FunctionDecl
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " with value ";
                 if( VarDecl* vardecl = dyn_cast<VarDecl>(vdecl) ) {
                   if( APValue* valptr =  vardecl->evaluateValue() ) {
                     llvm::raw_string_ostream OS_arg(cur_result.Name);
-                    valptr->dump(OS_arg);
+                    valptr->printPretty(OS_arg, TheSema.getASTContext(), vdecl->getType());
                     OS_arg.str(); // flush to string.
-                    cur_result.nullLocation();
                   } else {
                     cur_result.Name = "<could not evaluate>";
-                    cur_result.nullLocation();
                   }
                 } else {
                   llvm::raw_string_ostream OS_arg(cur_result.Name);
                   vdecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
                   OS_arg.str(); // flush to string.
-                  cur_result.fromLocation(TheSema, vdecl->getLocation(), "<unknown-location>");
+                  if( cur_result.Line < 1 )
+                    cur_result.fromLocation(TheSema, vdecl->getLocation(), "<unknown-location>");
                 }
-              } else {
+              }
+              if( QueryKind & LookForType ) {
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " of type ";
                 RegisterQualTypeQueryResult(cur_result, vdecl->getType());
               }
               break;
             }
             
             case TemplateArgument::Type: {
+              if( !cur_result.Name.empty() )
+                cur_result.Name += " standing for ";
               RegisterQualTypeQueryResult(cur_result, Args[I].getAsType());
               break;
             }
             
             case TemplateArgument::Template:
             case TemplateArgument::TemplateExpansion: {
+              if( !cur_result.Name.empty() )
+                cur_result.Name += " standing for ";
               llvm::raw_string_ostream OS_arg(cur_result.Name);
               TemplateName tname = Args[I].getAsTemplateOrTemplatePattern();
               tname.print(OS_arg, TheSema.getLangOpts());
@@ -295,20 +316,33 @@ public:
               if(TemplateDecl* tmp_decl = tname.getAsTemplateDecl()) {
                 sl = tmp_decl->getLocation();
               }
-              cur_result.fromLocation(TheSema, sl, "<unknown-location>");
+              if( cur_result.Line < 1 )
+                cur_result.fromLocation(TheSema, sl, "<unknown-location>");
               break;
             }
             
             case TemplateArgument::Expression: {
-              if( QueryKind == LookForValue ) {
-                // TODO Evaluate the expression to get the value printed.
+              if( QueryKind & LookForValue ) {
+                // Evaluate the expression to get the value printed.
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " with value ";
                 llvm::raw_string_ostream OS_arg(cur_result.Name);
                 Args[I].getAsExpr()->printPretty(OS_arg, NULL, TheSema.getLangOpts());
+                Expr::EvalResult expr_res;
+                if( Args[I].getAsExpr()->EvaluateAsRValue(expr_res, TheSema.getASTContext()) ) {
+                  OS_arg << " == ";
+                  expr_res.Val.printPretty(OS_arg, TheSema.getASTContext(), Args[I].getAsExpr()->getType());
+                } else {
+                  OS_arg << " == <could not evaluate>";
+                }
                 OS_arg.str(); // flush to string.
-                cur_result.fromLocation(
-                  TheSema, Args[I].getAsExpr()->getExprLoc(), 
-                  "<unknown-location>");
-              } else {
+                if( cur_result.Line < 1 )
+                  cur_result.fromLocation(
+                    TheSema, Args[I].getAsExpr()->getExprLoc(), "<unknown-location>");
+              }
+              if( QueryKind & LookForType ) {
+                if( !cur_result.Name.empty() )
+                  cur_result.Name += " of type ";
                 RegisterQualTypeQueryResult(cur_result, Args[I].getAsExpr()->getType());
               }
               break;
@@ -316,10 +350,11 @@ public:
             
             case TemplateArgument::Pack: {
               // not much better to do.
+              if( !cur_result.Name.empty() )
+                cur_result.Name += " standing for ";
               llvm::raw_string_ostream OS_arg(cur_result.Name);
               Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
               OS_arg.str(); // flush to string.
-              cur_result.nullLocation();
               break;
             }
             
@@ -341,43 +376,53 @@ public:
           for(DeclContext::lookup_result::iterator ri = (*it).begin(), 
               ri_end = (*it).end(); ri != ri_end; ++ri) {
             NamedDecl* ndecl = *ri;
+            if(!ndecl)
+              continue;
             PrintableQueryResult cur_result;
-            if( QueryKind == LookForDecl ) {
-              if( ndecl ) {
-                llvm::raw_string_ostream OS_arg(cur_result.Name);
-                ndecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
-                OS_arg.str(); // flush to string.
-                cur_result.fromLocation(TheSema, ndecl->getLocation(), "<unknown-location>");
-              }
-            } else {
+            if( QueryKind & LookForDecl ) {
+              llvm::raw_string_ostream OS_arg(cur_result.Name);
+              ndecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
+              OS_arg.str(); // flush to string.
+              cur_result.fromLocation(TheSema, ndecl->getLocation(), "<unknown-location>");
+            }
+            
+            if( QueryKind != LookForDecl ) { // if not (only) look-for-decl
               if(TypeDecl* tdecl = dyn_cast<TypeDecl>(ndecl)) {
                 if(TypedefNameDecl* utp = dyn_cast<TypedefNameDecl>(tdecl)) {
+                  if( !cur_result.Name.empty() )
+                    cur_result.Name += " alias for ";
                   RegisterQualTypeQueryResult(cur_result, utp->getUnderlyingType());
                 } else if(const Type* tp = tdecl->getTypeForDecl()) {
+                  if( !cur_result.Name.empty() )
+                    cur_result.Name += " standing for ";
                   RegisterQualTypeQueryResult(cur_result, tp->getCanonicalTypeInternal());
                 }
               } else
               if(ValueDecl* vdecl = dyn_cast<ValueDecl>(ndecl)) {
-                if( QueryKind == LookForValue ) {
+                if( QueryKind & LookForValue ) {
                   // Attempt to print out the constant-expression value of the declaration:
                   //  the meaningful ValueDecl would be NonTypeTemplateParmDecl, VarDecl, EnumConstantDecl, and maybe FunctionDecl
+                  if( !cur_result.Name.empty() )
+                    cur_result.Name += " with value ";
                   if( VarDecl* vardecl = dyn_cast<VarDecl>(vdecl) ) {
                     if( APValue* valptr =  vardecl->evaluateValue() ) {
                       llvm::raw_string_ostream OS_arg(cur_result.Name);
-                      valptr->dump(OS_arg);
+                      valptr->printPretty(OS_arg, TheSema.getASTContext(), vdecl->getType());
                       OS_arg.str(); // flush to string.
-                      cur_result.nullLocation();
                     } else {
                       cur_result.Name = "<could not evaluate>";
-                      cur_result.nullLocation();
                     }
                   } else {
                     llvm::raw_string_ostream OS_arg(cur_result.Name);
                     vdecl->getNameForDiagnostic(OS_arg, TheSema.getLangOpts(), true);
                     OS_arg.str(); // flush to string.
-                    cur_result.fromLocation(TheSema, vdecl->getLocation(), "<unknown-location>");
+                    if( cur_result.Line < 1 )
+                      cur_result.fromLocation(TheSema, vdecl->getLocation(), "<unknown-location>");
                   }
-                } else {
+                } 
+                if( QueryKind & LookForType ) {
+                  if( !cur_result.Name.empty() )
+                    cur_result.Name += " of type ";
                   RegisterQualTypeQueryResult(cur_result, vdecl->getType());
                 }
               }
@@ -717,7 +762,10 @@ public:
                 ( user_command == "lookup" ) ) {
         TemplateArgRecorder rec(TheSema, "^" + llvm::Regex::escape(com_arg) + "$", 
                                 TemplateArgRecorder::LookForDecl);
-        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() 
@@ -731,7 +779,10 @@ public:
       else if ( ( user_command == "rl" ) ||
                 ( user_command == "rlookup" ) ) {
         TemplateArgRecorder rec(TheSema, com_arg, TemplateArgRecorder::LookForDecl);
-        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() 
@@ -746,7 +797,10 @@ public:
                 ( user_command == "typeof" ) ) {
         TemplateArgRecorder rec(TheSema, "^" + llvm::Regex::escape(com_arg) + "$",
                                 TemplateArgRecorder::LookForType);
-        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() 
@@ -760,7 +814,10 @@ public:
       else if ( ( user_command == "rt" ) ||
                 ( user_command == "rtypeof" ) ) {
         TemplateArgRecorder rec(TheSema, com_arg, TemplateArgRecorder::LookForType);
-        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() 
@@ -775,7 +832,10 @@ public:
                 ( user_command == "eval" ) ) {
         TemplateArgRecorder rec(TheSema, "^" + llvm::Regex::escape(com_arg) + "$", 
                                 TemplateArgRecorder::LookForValue);
-        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() << it->Name << '\n';
@@ -785,10 +845,53 @@ public:
       else if ( ( user_command == "re" ) ||
                 ( user_command == "reval" ) ) {
         TemplateArgRecorder rec(TheSema, com_arg, TemplateArgRecorder::LookForValue);
-        rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
         for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
             it != rec.QueryResults.end(); ++it) {
           llvm::outs() << it->Name << '\n';
+        };
+        continue;
+      }
+      else if ( ( user_command == "w" ) ||
+                ( user_command == "whois" ) ) {
+        TemplateArgRecorder rec(TheSema, "^" + llvm::Regex::escape(com_arg) + "$", 
+                                TemplateArgRecorder::LookForDecl | 
+                                TemplateArgRecorder::LookForType | 
+                                TemplateArgRecorder::LookForValue);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
+            it != rec.QueryResults.end(); ++it) {
+          llvm::outs() 
+            << "Found " << it->Name << '\n'
+            << "  at " << it->FileName << '|' << it->Line << '|' << it->Column << '\n';
+          if( verboseMode && !it->SrcPointer.empty() )
+            llvm::outs() << it->SrcPointer << '\n';
+        };
+        continue;
+      }
+      else if ( ( user_command == "rw" ) ||
+                ( user_command == "rwhois" ) ) {
+        TemplateArgRecorder rec(TheSema, com_arg,
+                                TemplateArgRecorder::LookForDecl | 
+                                TemplateArgRecorder::LookForType | 
+                                TemplateArgRecorder::LookForValue);
+        if( EntriesStack.empty() )
+          rec.LookupInDeclContext(TheSema.getCurLexicalContext(), true);
+        else
+          rec.TraverseActiveTempInstantiation(EntriesStack.back().Inst);
+        for(std::vector<TemplateArgRecorder::PrintableQueryResult>::const_iterator it = rec.QueryResults.begin();
+            it != rec.QueryResults.end(); ++it) {
+          llvm::outs() 
+            << "Found " << it->Name << '\n'
+            << "  at " << it->FileName << '|' << it->Line << '|' << it->Column << '\n';
+          if( verboseMode && !it->SrcPointer.empty() )
+            llvm::outs() << it->SrcPointer << '\n';
         };
         continue;
       }
