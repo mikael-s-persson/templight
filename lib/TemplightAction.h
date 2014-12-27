@@ -45,12 +45,13 @@ public:
     bool OptOutputToStdOut, 
     bool OptMemoryProfile);
 
-  bool OutputToStdOut;
-  bool MemoryProfile;
-  bool OutputInSafeMode;
-  bool IgnoreSystemInst;
-  bool InstProfiler;
-  bool InteractiveDebug;
+  unsigned InstProfiler : 1;
+  unsigned OutputToStdOut : 1;
+  unsigned MemoryProfile : 1;
+  unsigned TraceTemplateOrigins : 1;
+  unsigned OutputInSafeMode : 1;
+  unsigned IgnoreSystemInst : 1;
+  unsigned InteractiveDebug : 1;
   std::string OutputFilename;
   std::string OutputFormat;
   std::string BlackListFilename;

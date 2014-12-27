@@ -183,6 +183,13 @@ void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
       case llvm::protobuf::getVarIntWire<5>::value:
         LastBeginEntry.MemoryUsage = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
+      case llvm::protobuf::getStringWire<6>::value: {
+        std::uint64_t cur_size = llvm::protobuf::loadVarInt(aSubBuffer);
+        loadLocation(aSubBuffer.slice(0, cur_size), fileNameMap, 
+          LastBeginEntry.TempOri_FileName, LastBeginEntry.TempOri_Line, LastBeginEntry.TempOri_Column);
+        aSubBuffer = aSubBuffer.drop_front(cur_size);
+        break;
+      }
       default:
         llvm::protobuf::skipData(aSubBuffer, cur_wire);
         break;

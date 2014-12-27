@@ -27,6 +27,9 @@ struct PrintableTemplightEntryBegin {
   int Column;
   double TimeStamp;
   std::uint64_t MemoryUsage;
+  std::string TempOri_FileName;
+  int TempOri_Line;
+  int TempOri_Column;
 };
 
 struct PrintableTemplightEntryEnd {

@@ -121,7 +121,7 @@ void TemplightAction::ExecuteAction() {
   
   if ( InstProfiler ) {
     TemplightTracer* p_t = new TemplightTracer(CI.getSema(), OutputFilename,
-      OutputFormat, MemoryProfile, OutputInSafeMode, IgnoreSystemInst);
+      OutputFormat, MemoryProfile, OutputInSafeMode, IgnoreSystemInst, TraceTemplateOrigins);
     p_t->readBlacklists(BlackListFilename);
     TemplateInstantiationObserver::appendNewObserver(
       CI.getSema().TemplateInstObserverChain, p_t);

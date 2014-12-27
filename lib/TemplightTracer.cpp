@@ -75,6 +75,19 @@ PrintableTemplightEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawT
   Ret.TimeStamp = Entry.TimeStamp;
   Ret.MemoryUsage = Entry.MemoryUsage;
   
+  if (Entry.Entity) {
+    PresumedLoc Loc = TheSema.getSourceManager().getPresumedLoc(Entry.Entity->getLocation());
+    if (!Loc.isInvalid()) {
+      Ret.TempOri_FileName = Loc.getFilename();
+      Ret.TempOri_Line = Loc.getLine();
+      Ret.TempOri_Column = Loc.getColumn();
+    } else {
+      Ret.TempOri_FileName = "";
+      Ret.TempOri_Line = 0;
+      Ret.TempOri_Column = 0;
+    }
+  }
+  
   return Ret;
 }
 
@@ -224,10 +237,12 @@ TemplightTracer::TemplightTracer(const Sema &TheSema,
                                  std::string Output, 
                                  const std::string& Format,
                                  bool Memory, bool Safemode, 
-                                 bool IgnoreSystem) :
+                                 bool IgnoreSystem, 
+                                 bool TraceTemplateOrigins) :
                                  MemoryFlag(Memory),
                                  SafeModeFlag(Safemode),
-                                 IgnoreSystemFlag(IgnoreSystem)  {
+                                 IgnoreSystemFlag(IgnoreSystem),
+                                 TraceTemplateOriginsFlag(TraceTemplateOrigins) {
   
   Printer.reset(new TemplightTracer::TracePrinter(TheSema, Output));
   

@@ -39,6 +39,7 @@ message TemplightEntry {
     required SourceLocation location = 3;
     optional double time_stamp = 4;
     optional uint64 memory_usage = 5;
+    optional SourceLocation template_origin = 6;
   }
   
   message End {

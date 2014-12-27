@@ -269,6 +269,7 @@ void TemplightProtobufWriter::printEntry(const PrintableTemplightEntryBegin& aEn
     required SourceLocation location = 3;
     optional double time_stamp = 4;
     optional uint64 memory_usage = 5;
+    optional SourceLocation template_origin = 6;
   }
     */
     
@@ -276,12 +277,17 @@ void TemplightProtobufWriter::printEntry(const PrintableTemplightEntryBegin& aEn
     llvm::protobuf::saveString(OS_inner, 2, 
                          printTemplateName(aEntry.Name));                 // name
     llvm::protobuf::saveString(OS_inner, 3, 
-                         printEntryLocation(aEntry.FileName, 
-                                            aEntry.Line, aEntry.Column)); // location
+                               printEntryLocation(aEntry.FileName, 
+                                                  aEntry.Line, 
+                                                  aEntry.Column)); // location
     llvm::protobuf::saveDouble(OS_inner, 4, aEntry.TimeStamp);            // time_stamp
     if ( aEntry.MemoryUsage > 0 )
       llvm::protobuf::saveVarInt(OS_inner, 5, aEntry.MemoryUsage);        // memory_usage
-    
+    if ( !aEntry.TempOri_FileName.empty() )
+      llvm::protobuf::saveString(OS_inner, 6, 
+                                 printEntryLocation(aEntry.TempOri_FileName, 
+                                                    aEntry.TempOri_Line, 
+                                                    aEntry.TempOri_Column)); // template_origin
   }
   
   std::string oneof_contents;
