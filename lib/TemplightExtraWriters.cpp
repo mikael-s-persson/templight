@@ -108,6 +108,10 @@ struct MappingTraits<clang::PrintableTemplightEntryBegin> {
     io.mapOptional("Location", loc);
     io.mapRequired("TimeStamp", Entry.TimeStamp);
     io.mapOptional("MemoryUsage", Entry.MemoryUsage);
+    std::string ori = Entry.TempOri_FileName + "|" + 
+                      std::to_string(Entry.TempOri_Line) + "|" + 
+                      std::to_string(Entry.TempOri_Column);
+    io.mapOptional("TemplateOrigin", ori);
   }
 };
 
@@ -189,9 +193,14 @@ void TemplightXmlWriter::printEntry(const PrintableTemplightEntryBegin& aEntry) 
     aEntry.FileName.c_str(), aEntry.Line, aEntry.Column);
   OutputOS << llvm::format(
     "    <TimeStamp time = \"%.9f\"/>\n"
-    "    <MemoryUsage bytes = \"%d\"/>\n"
-    "</TemplateBegin>\n", 
+    "    <MemoryUsage bytes = \"%d\"/>\n",
     aEntry.TimeStamp, aEntry.MemoryUsage);
+  if( !aEntry.TempOri_FileName.empty() ) {
+    OutputOS << llvm::format(
+      "    <TemplateOrigin>%s|%d|%d</TemplateOrigin>\n",
+      aEntry.TempOri_FileName.c_str(), aEntry.TempOri_Line, aEntry.TempOri_Column);
+  }
+  OutputOS << "</TemplateBegin>\n";
 }
 
 void TemplightXmlWriter::printEntry(const PrintableTemplightEntryEnd& aEntry) {
@@ -227,6 +236,11 @@ void TemplightTextWriter::printEntry(const PrintableTemplightEntryBegin& aEntry)
     "  TimeStamp = %.9f\n"
     "  MemoryUsage = %d\n", 
     aEntry.TimeStamp, aEntry.MemoryUsage);
+  if( !aEntry.TempOri_FileName.empty() ) {
+    OutputOS << llvm::format(
+      "  TemplateOrigin = %s|%d|%d\n",
+      aEntry.TempOri_FileName.c_str(), aEntry.TempOri_Line, aEntry.TempOri_Column);
+  }
 }
 
 void TemplightTextWriter::printEntry(const PrintableTemplightEntryEnd& aEntry) {
@@ -344,6 +358,11 @@ void TemplightNestedXMLWriter::openPrintedTreeNode(const EntryTraversalTask& aNo
   OutputOS << llvm::format(
     "Location=\"%s|%d|%d\" ", 
     BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
+  if( !BegEntry.TempOri_FileName.empty() ) {
+    OutputOS << llvm::format(
+      "TemplateOrigin=\"%s|%d|%d\" ",
+      BegEntry.TempOri_FileName.c_str(), BegEntry.TempOri_Line, BegEntry.TempOri_Column);
+  }
   OutputOS << llvm::format(
     "Time=\"%.9f\" Memory=\"%d\">\n", 
     EndEntry.TimeStamp - BegEntry.TimeStamp,
@@ -376,7 +395,8 @@ TemplightGraphMLWriter::TemplightGraphMLWriter(llvm::raw_ostream& aOS) :
     "</key>\n"
     "<key id=\"d4\" for=\"node\" attr.name=\"Memory\" attr.type=\"long\">\n"
       "<default>0</default>\n"
-    "</key>\n";
+    "</key>\n"
+    "<key id=\"d5\" for=\"node\" attr.name=\"TemplateOrigin\" attr.type=\"string\"/>\n";
 }
 
 TemplightGraphMLWriter::~TemplightGraphMLWriter() {
@@ -409,6 +429,11 @@ void TemplightGraphMLWriter::openPrintedTreeNode(const EntryTraversalTask& aNode
     "  <data key=\"d4\">%d</data>\n", 
     EndEntry.TimeStamp - BegEntry.TimeStamp,
     EndEntry.MemoryUsage - BegEntry.MemoryUsage);
+  if( !BegEntry.TempOri_FileName.empty() ) {
+    OutputOS << llvm::format(
+      "  <data key=\"d2\">\"%s|%d|%d\"</data>\n",
+      BegEntry.TempOri_FileName.c_str(), BegEntry.TempOri_Line, BegEntry.TempOri_Column);
+  }
   
   OutputOS << "</node>\n";
   if ( aNode.parent_id == RecordedDFSEntryTree::invalid_id )
@@ -449,7 +474,13 @@ void TemplightGraphVizWriter::openPrintedTreeNode(const EntryTraversalTask& aNod
         "%s\\n"
         "At %s Line %d Column %d\\n",
       InstantiationKindStrings[BegEntry.InstantiationKind], EscapedName.c_str(),
-      BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column)
+      BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
+  if( !BegEntry.TempOri_FileName.empty() ) {
+    OutputOS << llvm::format(
+      "From %s Line %d Column %d\\n",
+      BegEntry.TempOri_FileName.c_str(), BegEntry.TempOri_Line, BegEntry.TempOri_Column);
+  }
+  OutputOS 
     << llvm::format(
         "Time: %.9f seconds Memory: %d bytes\" ];\n",
       EndEntry.TimeStamp - BegEntry.TimeStamp,
