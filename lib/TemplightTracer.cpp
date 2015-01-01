@@ -39,13 +39,16 @@ namespace {
 
 struct RawTemplightTraceEntry {
   bool IsTemplateBegin;
+  std::size_t ParentBeginIdx;
   ActiveTemplateInstantiation::InstantiationKind InstantiationKind;
   Decl *Entity;
   SourceLocation PointOfInstantiation;
   double TimeStamp;
   std::uint64_t MemoryUsage;
   
-  RawTemplightTraceEntry() : IsTemplateBegin(true), 
+  static const std::size_t invalid_parent = ~std::size_t(0);
+  
+  RawTemplightTraceEntry() : IsTemplateBegin(true), ParentBeginIdx(invalid_parent),
     InstantiationKind(ActiveTemplateInstantiation::TemplateInstantiation),
     Entity(0), TimeStamp(0.0), MemoryUsage(0) { };
 };
@@ -103,7 +106,7 @@ class TemplightTracer::TracePrinter : public TemplightEntryPrinter {
 public:
   
   void skipRawEntry(const RawTemplightTraceEntry &Entry) {
-    skipEntry(rawToPrintableBegin(TheSema, Entry));
+    skipEntry();
   }
   
   bool shouldIgnoreRawEntry(const RawTemplightTraceEntry &Entry) {
@@ -114,32 +117,57 @@ public:
       return true;
     }
     
+    // if we have an end entry, we must ensure it corresponds to the current begin entry:
+    //  these checks are a bit redundant and overly cautious, but better safe than sorry when sanitizing.
+    if ( (!Entry.IsTemplateBegin) &&
+         ( ( TraceEntries.empty() ) || 
+           ( CurrentParentBegin == RawTemplightTraceEntry::invalid_parent ) || 
+           ( CurrentParentBegin >= TraceEntries.size() ) ||
+           !( ( TraceEntries[CurrentParentBegin].InstantiationKind == Entry.InstantiationKind ) &&
+              ( TraceEntries[CurrentParentBegin].Entity == Entry.Entity ) ) ) ) {
+      return true; // ignore end entries that don't match the current begin entry.
+    }
+    
     return false;
+  };
+  
+  void printOrSkipEntry(RawTemplightTraceEntry &Entry) {
+    if ( IgnoreSystemFlag && TheSema.getSourceManager()
+                                .isInSystemHeader(Entry.PointOfInstantiation) ) {
+      skipRawEntry(Entry); // recursively skip all entries until end of this one.
+    } else {
+      if ( Entry.IsTemplateBegin ) {
+        printEntry(rawToPrintableBegin(TheSema, Entry));
+      } else {
+        printEntry(rawToPrintableEnd(TheSema, Entry));
+      }
+    }
   };
   
   void printCachedRawEntries() {
     for(std::vector<RawTemplightTraceEntry>::iterator it = TraceEntries.begin();
-        it != TraceEntries.end(); ++it) {
-      if ( it->IsTemplateBegin )
-        printEntry(rawToPrintableBegin(TheSema, *it));
-      else
-        printEntry(rawToPrintableEnd(TheSema, *it));
-    }
+        it != TraceEntries.end(); ++it)
+      printOrSkipEntry(*it);
     TraceEntries.clear();
+    CurrentParentBegin = RawTemplightTraceEntry::invalid_parent;
   };
   
-  void printRawEntry(const RawTemplightTraceEntry &Entry, bool inSafeMode = false) {
+  void printRawEntry(RawTemplightTraceEntry Entry, bool inSafeMode = false) {
     if ( shouldIgnoreRawEntry(Entry) )
       return;
     
-    if ( inSafeMode ) {
-      if ( Entry.IsTemplateBegin )
-        printEntry(rawToPrintableBegin(TheSema, Entry));
-      else
-        printEntry(rawToPrintableEnd(TheSema, Entry));
-    } else {
-      TraceEntries.push_back(Entry);
-    }
+    if ( inSafeMode )
+      printOrSkipEntry(Entry);
+    
+    // Always maintain a stack of cached trace entries such that the sanity of the traces can be enforced.
+    if ( Entry.IsTemplateBegin ) {
+      Entry.ParentBeginIdx = CurrentParentBegin;
+      CurrentParentBegin = TraceEntries.size();
+    } else { // note: this point should not be reached if CurrentParentBegin is not valid.
+      Entry.ParentBeginIdx = TraceEntries[CurrentParentBegin].ParentBeginIdx;
+      CurrentParentBegin = Entry.ParentBeginIdx;
+    };
+    TraceEntries.push_back(Entry); 
     
     if ( Entry.IsTemplateBegin )
       LastClosedMemoization = nullptr;
@@ -147,10 +175,16 @@ public:
          ( Entry.InstantiationKind == ActiveTemplateInstantiation::Memoization ) )
       LastClosedMemoization = Entry.Entity;
     
-    if ( !inSafeMode && !Entry.IsTemplateBegin &&
+    if ( !Entry.IsTemplateBegin &&
          ( Entry.InstantiationKind == TraceEntries.front().InstantiationKind ) &&
-         ( Entry.Entity == TraceEntries.front().Entity ) )
-      printCachedRawEntries();
+         ( Entry.Entity == TraceEntries.front().Entity ) ) {  // did we reach the end of the top-level begin entry?
+      if ( !inSafeMode ) { // if not in safe-mode, print out the cached entries.
+        printCachedRawEntries();
+      } else { // if in safe-mode, simply clear the cached entries.
+        TraceEntries.clear();
+        CurrentParentBegin = RawTemplightTraceEntry::invalid_parent;
+      }
+    }
   };
   
   void startTrace() {
@@ -166,9 +200,11 @@ public:
     finalize();
   };
   
-  TracePrinter(const Sema &aSema, const std::string &Output) : 
+  TracePrinter(const Sema &aSema, const std::string &Output, bool IgnoreSystem = false) : 
                TemplightEntryPrinter(Output), TheSema(aSema), 
-               LastClosedMemoization(nullptr) { };
+               LastClosedMemoization(nullptr), 
+               CurrentParentBegin(RawTemplightTraceEntry::invalid_parent), 
+               IgnoreSystemFlag(IgnoreSystem) { };
   
   ~TracePrinter() { };
   
@@ -176,6 +212,9 @@ public:
   
   std::vector<RawTemplightTraceEntry> TraceEntries;
   Decl* LastClosedMemoization;
+  std::size_t CurrentParentBegin;
+  
+  unsigned IgnoreSystemFlag : 1;
   
 };
 
@@ -191,12 +230,6 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
   Entry.InstantiationKind = Inst.Kind;
   Entry.Entity = Inst.Entity;
   Entry.PointOfInstantiation = Inst.PointOfInstantiation;
-  
-  if ( IgnoreSystemFlag && TheSema.getSourceManager()
-                            .isInSystemHeader(Inst.PointOfInstantiation) ) {
-    Printer->skipRawEntry(Entry); // recursively skip all entries until end of this one.
-    return;
-  }
   
   // NOTE: Use this function because it produces time since start of process.
   llvm::sys::TimeValue now(0,0), user(0,0), sys(0,0);
@@ -241,10 +274,9 @@ TemplightTracer::TemplightTracer(const Sema &TheSema,
                                  bool TraceTemplateOrigins) :
                                  MemoryFlag(Memory),
                                  SafeModeFlag(Safemode),
-                                 IgnoreSystemFlag(IgnoreSystem),
                                  TraceTemplateOriginsFlag(TraceTemplateOrigins) {
   
-  Printer.reset(new TemplightTracer::TracePrinter(TheSema, Output));
+  Printer.reset(new TemplightTracer::TracePrinter(TheSema, Output, IgnoreSystem));
   
   if ( !Printer->getTraceStream() ) {
     llvm::errs() << "Error: [Templight-Tracer] Failed to create template trace file!";

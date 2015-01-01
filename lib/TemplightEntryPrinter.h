@@ -27,7 +27,7 @@ class TemplightWriter;
 class TemplightEntryPrinter {
 public:
   
-  void skipEntry(const PrintableTemplightEntryBegin &Entry);
+  void skipEntry();
   bool shouldIgnoreEntry(const PrintableTemplightEntryBegin &Entry);
   bool shouldIgnoreEntry(const PrintableTemplightEntryEnd &Entry);
   
@@ -49,7 +49,6 @@ public:
   
 private:
   
-  PrintableTemplightEntryBegin CurrentSkippedEntry;
   std::size_t SkippedEndingsCount;
   std::unique_ptr<llvm::Regex> CoRegex;
   std::unique_ptr<llvm::Regex> IdRegex;

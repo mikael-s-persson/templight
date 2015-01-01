@@ -34,7 +34,6 @@ private:
   
   unsigned MemoryFlag : 1;
   unsigned SafeModeFlag : 1;
-  unsigned IgnoreSystemFlag : 1;
   unsigned TraceTemplateOriginsFlag : 1;
   
   std::unique_ptr<TracePrinter> Printer;

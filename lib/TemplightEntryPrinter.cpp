@@ -18,24 +18,25 @@
 namespace clang {
 
 
-void TemplightEntryPrinter::skipEntry(const PrintableTemplightEntryBegin &Entry) {
-  if ( !CurrentSkippedEntry.Name.empty() )
+void TemplightEntryPrinter::skipEntry() {
+  if ( SkippedEndingsCount ) {
+    ++SkippedEndingsCount; // note: this is needed because skipped entries are begin entries for which "shouldIgnoreEntry" is never called.
     return; // Already skipping entries.
-  CurrentSkippedEntry = Entry;
+  }
   SkippedEndingsCount = 1;
 }
 
 bool TemplightEntryPrinter::shouldIgnoreEntry(const PrintableTemplightEntryBegin &Entry) {
   // Check the black-lists:
   // (1) Is currently ignoring entries?
-  if ( !CurrentSkippedEntry.Name.empty() ) {
+  if ( SkippedEndingsCount ) {
     ++SkippedEndingsCount;
     return true;
   }
   // (2) Regexes:
   if ( ( CoRegex && ( CoRegex->match(Entry.Name) ) ) || 
        ( IdRegex && ( IdRegex->match(Entry.Name) ) ) ) {
-    skipEntry(Entry);
+    skipEntry();
     return true;
   }
   
@@ -45,12 +46,8 @@ bool TemplightEntryPrinter::shouldIgnoreEntry(const PrintableTemplightEntryBegin
 bool TemplightEntryPrinter::shouldIgnoreEntry(const PrintableTemplightEntryEnd &Entry) {
   // Check the black-lists:
   // (1) Is currently ignoring entries?
-  if ( !CurrentSkippedEntry.Name.empty() ) {
+  if ( SkippedEndingsCount ) {
     --SkippedEndingsCount;
-    // Should skip the entry, but need to check if it's the last entry to skip:
-    if ( SkippedEndingsCount == 0 ) {
-      CurrentSkippedEntry.Name = "";
-    }
     return true;
   }
   return false;
@@ -83,8 +80,7 @@ void TemplightEntryPrinter::finalize() {
     p_writer->finalize();
 }
 
-TemplightEntryPrinter::TemplightEntryPrinter(const std::string &Output) : TraceOS(0) {
-  CurrentSkippedEntry.Name = "";
+TemplightEntryPrinter::TemplightEntryPrinter(const std::string &Output) : SkippedEndingsCount(0), TraceOS(0) {
   if ( Output == "-" ) {
     TraceOS = &llvm::outs();
   } else {
