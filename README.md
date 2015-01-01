@@ -168,7 +168,7 @@ The overall behavior in the above three cases is designed such that when templig
 
 Templight outputs its traces to a Google protocol buffer output format to minimize the size of the files and the time necessary to produce and load the trace files. For convenience, however, a conversion tool is provided, `templight-convert`, to produce other output formats that may be more convenient for third-party applications. Currently, `templight-convert` provides the following output formats:
 
- - "protobuf": Output in a Google protocol buffer format, which is an efficient binary extensible format. The message definition file is provided, as `templight_message.proto`, so that off-the-shelf protobuf software can be used to read the trace files. The format uses some dictionary-based compression to minimize it's size, therefore, additional steps are necessary to reconstruct the file names and template names.
+ - "protobuf": Output in a Google protocol buffer format, which is an efficient binary extensible format. The message definition file is provided, as `templight_message.proto`, so that off-the-shelf protobuf software can be used to read the trace files. The format uses some dictionary-based compression to minimize it's size, therefore, additional steps are necessary to reconstruct the file names and template names (as explained in [this wiki page](https://github.com/mikael-s-persson/templight/wiki/Protobuf-Template-Name-Compression---Explained)).
  - "yaml": A YAML format, which is a simple text-based markup language.
  - "xml": An XML format, the well-known text-based markup language.
  - "text": A simple text file, mostly for human-readability.
