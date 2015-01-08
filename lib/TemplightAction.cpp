@@ -13,7 +13,7 @@
 
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Sema/Sema.h>
-#include <clang/Sema/TemplateInstObserver.h>
+#include <clang/Sema/TemplateInstCallbacks.h>
 
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -123,15 +123,15 @@ void TemplightAction::ExecuteAction() {
     TemplightTracer* p_t = new TemplightTracer(CI.getSema(), OutputFilename,
       OutputFormat, MemoryProfile, OutputInSafeMode, IgnoreSystemInst, TraceTemplateOrigins);
     p_t->readBlacklists(BlackListFilename);
-    TemplateInstantiationObserver::appendNewObserver(
-      CI.getSema().TemplateInstObserverChain, p_t);
+    TemplateInstantiationCallbacks::appendNewCallbacks(
+      CI.getSema().TemplateInstCallbacksChain, p_t);
   }
   if ( InteractiveDebug ) {
     TemplightDebugger* p_t = new TemplightDebugger(CI.getSema(), 
       MemoryProfile, IgnoreSystemInst);
     p_t->readBlacklists(BlackListFilename);
-    TemplateInstantiationObserver::appendNewObserver(
-      CI.getSema().TemplateInstObserverChain, p_t);
+    TemplateInstantiationCallbacks::appendNewCallbacks(
+      CI.getSema().TemplateInstCallbacksChain, p_t);
   }
   
   WrapperFrontendAction::ExecuteAction();

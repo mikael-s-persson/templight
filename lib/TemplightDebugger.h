@@ -10,7 +10,7 @@
 #ifndef LLVM_CLANG_TEMPLIGHT_DEBUGGER_H
 #define LLVM_CLANG_TEMPLIGHT_DEBUGGER_H
 
-#include "clang/Sema/TemplateInstObserver.h"
+#include "clang/Sema/TemplateInstCallbacks.h"
 
 #include <memory>
 #include <string>
@@ -18,7 +18,7 @@
 namespace clang {
 
 
-class TemplightDebugger : public TemplateInstantiationObserver {
+class TemplightDebugger : public TemplateInstantiationCallbacks {
 public:
   
   class InteractiveAgent; // forward-decl.

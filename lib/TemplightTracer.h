@@ -10,7 +10,7 @@
 #ifndef LLVM_CLANG_TEMPLIGHT_TRACER_H
 #define LLVM_CLANG_TEMPLIGHT_TRACER_H
 
-#include "clang/Sema/TemplateInstObserver.h"
+#include "clang/Sema/TemplateInstCallbacks.h"
 
 #include <memory>
 #include <string>
@@ -18,7 +18,7 @@
 namespace clang {
 
 
-class TemplightTracer : public TemplateInstantiationObserver {
+class TemplightTracer : public TemplateInstantiationCallbacks {
 public:
   
   class TracePrinter; // forward-decl.

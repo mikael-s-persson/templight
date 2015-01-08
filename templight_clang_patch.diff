@@ -1,6 +1,6 @@
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 224687)
+--- include/clang/FrontendTool/Utils.h	(revision 225124)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
 @@ -18,7 +18,10 @@
  namespace clang {
@@ -17,8 +17,8 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 ===================================================================
 --- include/clang/Sema/ActiveTemplateInst.h	(revision 0)
 +++ include/clang/Sema/ActiveTemplateInst.h	(working copy)
-@@ -0,0 +1,139 @@
-+//===--- ActiveTemplateInst.h - Active Template Instantiation Records --------------*- C++ -*-===//
+@@ -0,0 +1,131 @@
++//===- ActiveTemplateInst.h - Active Template Instantiation Records - C++ -===//
 +//
 +//                     The LLVM Compiler Infrastructure
 +//
@@ -46,7 +46,6 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 +namespace sema {
 +  class TemplateDeductionInfo;
 +}
-+
 +
 +/// \brief A template instantiation that is currently in progress.
 +class ActiveTemplateInstantiation {
@@ -138,7 +137,6 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 +
 +};
 +
-+
 +bool operator==(const ActiveTemplateInstantiation &X,
 +                const ActiveTemplateInstantiation &Y);
 +
@@ -148,18 +146,12 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 +  return !(X == Y);
 +}
 +
-+
-+
 +}
 +
-+
 +#endif
-+
-+
-+
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 224687)
+--- include/clang/Sema/Sema.h	(revision 225124)
 +++ include/clang/Sema/Sema.h	(working copy)
 @@ -31,6 +31,7 @@
  #include "clang/Basic/Specifiers.h"
@@ -173,7 +165,7 @@ Index: include/clang/Sema/Sema.h
    class TemplateArgumentList;
    class TemplateArgumentLoc;
    class TemplateDecl;
-+  class TemplateInstantiationObserver;
++  class TemplateInstantiationCallbacks;
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
@@ -298,42 +290,41 @@ Index: include/clang/Sema/Sema.h
    /// \brief List of active template instantiations.
    ///
    /// This vector is treated as a stack. As one template instantiation
-@@ -6439,6 +6327,14 @@
+@@ -6439,6 +6327,13 @@
    /// to implement it anywhere else.
    ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
  
-+  /// \brief The template instantiation observer to trace or track 
-+  /// instantiations (observers can be chained).
++  /// \brief The template instantiation callbacks to trace or track 
++  /// instantiations (objects can be chained).
 +  ///
-+  /// This observer is used to print, trace or track template
-+  /// instantiations as they are being constructed. For example, 
-+  /// the 'templight' option is implemented with one such observer.
-+  std::unique_ptr<TemplateInstantiationObserver> TemplateInstObserverChain;
++  /// This callbacks is used to print, trace or track template
++  /// instantiations as they are being constructed.
++  std::unique_ptr<TemplateInstantiationCallbacks> TemplateInstCallbacksChain;
 +
    /// \brief The current index into pack expansion arguments that will be
    /// used for substitution of parameter packs.
    ///
-Index: include/clang/Sema/TemplateInstObserver.h
+Index: include/clang/Sema/TemplateInstCallbacks.h
 ===================================================================
---- include/clang/Sema/TemplateInstObserver.h	(revision 0)
-+++ include/clang/Sema/TemplateInstObserver.h	(working copy)
-@@ -0,0 +1,98 @@
-+//===--- TemplateInstObserver.h - Template Instantiation Observer --------------*- C++ -*-===//
+--- include/clang/Sema/TemplateInstCallbacks.h	(revision 0)
++++ include/clang/Sema/TemplateInstCallbacks.h	(working copy)
+@@ -0,0 +1,96 @@
++//===- TemplateInstCallbacks.h - Template Instantiation Callbacks - C++ --===//
 +//
 +//                     The LLVM Compiler Infrastructure
 +//
 +// This file is distributed under the University of Illinois Open Source
 +// License. See LICENSE.TXT for details.
 +//
-+//===----------------------------------------------------------------------===//
++//===---------------------------------------------------------------------===//
 +//
-+// This file defines the TemplateInstantiationObserver class, which is the base
-+// class for an observer that will be notified (callback) at every template instantiation.
++// This file defines the TemplateInstantiationCallbacks class, which is the 
++// base class for callbacks that will be notified at template instantiations.
 +//
-+//===----------------------------------------------------------------------===//
++//===---------------------------------------------------------------------===//
 +
-+#ifndef LLVM_CLANG_TEMPLATE_INST_OBSERVER_H
-+#define LLVM_CLANG_TEMPLATE_INST_OBSERVER_H
++#ifndef LLVM_CLANG_TEMPLATE_INST_CALLBACKS_H
++#define LLVM_CLANG_TEMPLATE_INST_CALLBACKS_H
 +
 +#include "clang/Basic/SourceLocation.h"
 +
@@ -341,53 +332,57 @@ Index: include/clang/Sema/TemplateInstObserver.h
 +#include <memory>
 +
 +namespace clang {
-+  
-+  class Sema;
-+  class ActiveTemplateInstantiation;
-+  
-+/// \brief This is a base class for an observer that will be notified (callback) at every template instantiation.
-+class TemplateInstantiationObserver {
++
++class ActiveTemplateInstantiation;
++class Sema;
++
++/// \brief This is a base class for callbacks that will be notified at every 
++/// template instantiation.
++class TemplateInstantiationCallbacks {
 +public:
 +  
 +  /// \brief Called before doing AST-parsing.
 +  void initialize(const Sema &TheSema) {
 +    this->initializeImpl(TheSema);
-+    if ( NextObserver )
-+      NextObserver->initialize(TheSema);
++    if (NextCallbacks)
++      NextCallbacks->initialize(TheSema);
 +  };
 +  
 +  /// \brief Called after AST-parsing is completed.
 +  void finalize(const Sema &TheSema) {
 +    this->finalizeImpl(TheSema);
-+    if ( NextObserver )
-+      NextObserver->finalize(TheSema);
++    if (NextCallbacks)
++      NextCallbacks->finalize(TheSema);
 +  };
 +  
 +  /// \brief Called when instantiation of a template just began.
-+  void atTemplateBegin(const Sema &TheSema, const ActiveTemplateInstantiation &Inst) {
++  void atTemplateBegin(const Sema &TheSema, 
++                       const ActiveTemplateInstantiation &Inst) {
 +    this->atTemplateBeginImpl(TheSema, Inst);
-+    if ( NextObserver )
-+      NextObserver->atTemplateBegin(TheSema, Inst);
++    if (NextCallbacks)
++      NextCallbacks->atTemplateBegin(TheSema, Inst);
 +  };
 +  
 +  /// \brief Called when instantiation of a template is just about to end.
-+  void atTemplateEnd(const Sema &TheSema, const ActiveTemplateInstantiation& Inst) {
++  void atTemplateEnd(const Sema &TheSema, 
++                     const ActiveTemplateInstantiation &Inst) {
 +    this->atTemplateEndImpl(TheSema, Inst);
-+    if ( NextObserver )
-+      NextObserver->atTemplateEnd(TheSema, Inst);
++    if (NextCallbacks)
++      NextCallbacks->atTemplateEnd(TheSema, Inst);
 +  };
 +  
-+  virtual ~TemplateInstantiationObserver() { };
++  virtual ~TemplateInstantiationCallbacks() { };
 +  
 +  /// \brief Appends a new observer to the end of this list.
-+  /// \note This function uses a tail-call recursion (and is not performance-critical).
-+  static void appendNewObserver(std::unique_ptr<TemplateInstantiationObserver>& CurrentChain,
-+                                TemplateInstantiationObserver* NewObserver) {
-+    if ( !CurrentChain ) {
-+      CurrentChain.reset(NewObserver);
++  /// \note This function uses a tail-call recursion.
++  static void appendNewCallbacks(
++      std::unique_ptr<TemplateInstantiationCallbacks> &CurrentChain,
++      TemplateInstantiationCallbacks *NewCallbacks) {
++    if (!CurrentChain) {
++      CurrentChain.reset(NewCallbacks);
 +      return;
 +    };
-+    appendNewObserver(CurrentChain->NextObserver, NewObserver);
++    appendNewCallbacks(CurrentChain->NextCallbacks, NewCallbacks);
 +  };
 +  
 +protected:
@@ -399,26 +394,20 @@ Index: include/clang/Sema/TemplateInstObserver.h
 +  
 +  /// \brief Called when instantiation of a template just began.
 +  virtual void atTemplateBeginImpl(const Sema &TheSema, 
-+                                   const ActiveTemplateInstantiation& Inst) { };
++                                   const ActiveTemplateInstantiation &Inst) {};
 +  /// \brief Called when instantiation of a template is just about to end.
 +  virtual void atTemplateEndImpl(const Sema &TheSema, 
-+                                 const ActiveTemplateInstantiation& Inst) { };
++                                 const ActiveTemplateInstantiation &Inst) {};
 +  
-+  std::unique_ptr<TemplateInstantiationObserver> NextObserver;
++  std::unique_ptr<TemplateInstantiationCallbacks> NextCallbacks;
 +};
-+
-+
 +
 +}
 +
-+
 +#endif
-+
-+
-+
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 224687)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 225124)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -31,6 +31,8 @@
  using namespace clang;
@@ -455,29 +444,29 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 224687)
+--- lib/Parse/ParseAST.cpp	(revision 225124)
 +++ lib/Parse/ParseAST.cpp	(working copy)
-@@ -23,6 +23,7 @@
+@@ -22,6 +22,7 @@
  #include "clang/Sema/ExternalSemaSource.h"
  #include "clang/Sema/Sema.h"
  #include "clang/Sema/SemaConsumer.h"
-+#include "clang/Sema/TemplateInstObserver.h"
++#include "clang/Sema/TemplateInstCallbacks.h"
  #include "llvm/Support/CrashRecoveryContext.h"
  #include <cstdio>
  #include <memory>
-@@ -108,6 +109,11 @@
+@@ -107,6 +108,11 @@
    bool OldCollectStats = PrintStats;
    std::swap(OldCollectStats, S.CollectStats);
  
 +  // Initialize the template instantiation observer chain.
 +  // FIXME: See note on "finalize" below.
-+  if (S.TemplateInstObserverChain)
-+    S.TemplateInstObserverChain->initialize(S);
++  if (S.TemplateInstCallbacksChain)
++    S.TemplateInstCallbacksChain->initialize(S);
 +
    ASTConsumer *Consumer = &S.getASTConsumer();
  
    std::unique_ptr<Parser> ParseOP(
-@@ -151,6 +157,14 @@
+@@ -150,6 +156,14 @@
    
    Consumer->HandleTranslationUnit(S.getASTContext());
  
@@ -486,8 +475,8 @@ Index: lib/Parse/ParseAST.cpp
 +  // Sema does not have a reliable "Finalize" function (it has a 
 +  // destructor, but it is not guaranteed to be called ("-disable-free")).
 +  // So, do the initialization above and do the finalization here:
-+  if (S.TemplateInstObserverChain)
-+    S.TemplateInstObserverChain->finalize(S);
++  if (S.TemplateInstCallbacksChain)
++    S.TemplateInstCallbacksChain->finalize(S);
 +
    std::swap(OldCollectStats, S.CollectStats);
    if (PrintStats) {
@@ -497,7 +486,7 @@ Index: lib/Sema/ActiveTemplateInst.cpp
 --- lib/Sema/ActiveTemplateInst.cpp	(revision 0)
 +++ lib/Sema/ActiveTemplateInst.cpp	(working copy)
 @@ -0,0 +1,74 @@
-+//===--- ActiveTemplateInst.cpp - Active Template Instantiation Records ------===//
++//===--- ActiveTemplateInst.cpp - Active Template Instantiation Records ---===//
 +//
 +//                     The LLVM Compiler Infrastructure
 +//
@@ -506,8 +495,8 @@ Index: lib/Sema/ActiveTemplateInst.cpp
 +//
 +//===----------------------------------------------------------------------===//
 +//
-+// This file implements basic operators on the class that represents active template 
-+// instantiations during semantic analysis.
++// This file implements basic operators on the class that represents active 
++// template instantiations during semantic analysis.
 +//
 +//===----------------------------------------------------------------------===//
 +
@@ -573,7 +562,7 @@ Index: lib/Sema/ActiveTemplateInst.cpp
 +
 Index: lib/Sema/CMakeLists.txt
 ===================================================================
---- lib/Sema/CMakeLists.txt	(revision 224687)
+--- lib/Sema/CMakeLists.txt	(revision 225124)
 +++ lib/Sema/CMakeLists.txt	(working copy)
 @@ -3,6 +3,7 @@
    )
@@ -585,25 +574,25 @@ Index: lib/Sema/CMakeLists.txt
    CodeCompleteConsumer.cpp
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 224687)
+--- lib/Sema/Sema.cpp	(revision 225124)
 +++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/ScopeInfo.h"
  #include "clang/Sema/SemaConsumer.h"
  #include "clang/Sema/TemplateDeduction.h"
-+#include "clang/Sema/TemplateInstObserver.h"
++#include "clang/Sema/TemplateInstCallbacks.h"
  #include "llvm/ADT/APFloat.h"
  #include "llvm/ADT/DenseMap.h"
  #include "llvm/ADT/SmallSet.h"
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 224687)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 225124)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
  #include "clang/Sema/Template.h"
  #include "clang/Sema/TemplateDeduction.h"
-+#include "clang/Sema/TemplateInstObserver.h"
++#include "clang/Sema/TemplateInstCallbacks.h"
  
  using namespace clang;
  using namespace sema;
@@ -636,8 +625,8 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
      Inst.InstantiationRange = InstantiationRange;
      SemaRef.InNonInstantiationSFINAEContext = false;
      SemaRef.ActiveTemplateInstantiations.push_back(Inst);
-+    if ( SemaRef.TemplateInstObserverChain )
-+      SemaRef.TemplateInstObserverChain->atTemplateBegin(SemaRef, Inst);
++    if (SemaRef.TemplateInstCallbacksChain)
++      SemaRef.TemplateInstCallbacksChain->atTemplateBegin(SemaRef, Inst);
      if (!Inst.isInstantiationRecord())
        ++SemaRef.NonInstantiationEntries;
    }
@@ -645,8 +634,8 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
        SemaRef.ActiveTemplateInstantiationLookupModules.pop_back();
      }
  
-+    if ( SemaRef.TemplateInstObserverChain )
-+      SemaRef.TemplateInstObserverChain->atTemplateEnd(
++    if (SemaRef.TemplateInstCallbacksChain)
++      SemaRef.TemplateInstCallbacksChain->atTemplateEnd(
 +        SemaRef, SemaRef.ActiveTemplateInstantiations.back());
 +
      SemaRef.ActiveTemplateInstantiations.pop_back();
@@ -674,17 +663,17 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
  
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 224687)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 225124)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -22,6 +22,7 @@
  #include "clang/Sema/Lookup.h"
  #include "clang/Sema/PrettyDeclStackTrace.h"
  #include "clang/Sema/Template.h"
-+#include "clang/Sema/TemplateInstObserver.h"
++#include "clang/Sema/TemplateInstCallbacks.h"
  
  using namespace clang;
  
-@@ -3177,7 +3178,7 @@
+@@ -3179,7 +3180,7 @@
    // into a template instantiation for this specific function template
    // specialization, which is not a SFINAE context, so that we diagnose any
    // further errors in the declaration itself.
@@ -693,43 +682,43 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
    ActiveInstType &ActiveInst = SemaRef.ActiveTemplateInstantiations.back();
    if (ActiveInst.Kind == ActiveInstType::ExplicitTemplateArgumentSubstitution ||
        ActiveInst.Kind == ActiveInstType::DeducedTemplateArgumentSubstitution) {
-@@ -3186,8 +3187,12 @@
+@@ -3188,8 +3189,12 @@
        assert(FunTmpl->getTemplatedDecl() == Tmpl &&
               "Deduction from the wrong function template?");
        (void) FunTmpl;
-+      if ( SemaRef.TemplateInstObserverChain )
-+        SemaRef.TemplateInstObserverChain->atTemplateEnd(SemaRef, ActiveInst);
++      if (SemaRef.TemplateInstCallbacksChain)
++        SemaRef.TemplateInstCallbacksChain->atTemplateEnd(SemaRef, ActiveInst);
        ActiveInst.Kind = ActiveInstType::TemplateInstantiation;
        ActiveInst.Entity = New;
-+      if ( SemaRef.TemplateInstObserverChain )
-+        SemaRef.TemplateInstObserverChain->atTemplateBegin(SemaRef, ActiveInst);
++      if (SemaRef.TemplateInstCallbacksChain)
++        SemaRef.TemplateInstCallbacksChain->atTemplateBegin(SemaRef, ActiveInst);
      }
    }
  
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 224687)
+--- lib/Sema/SemaType.cpp	(revision 225124)
 +++ lib/Sema/SemaType.cpp	(working copy)
 @@ -30,6 +30,7 @@
  #include "clang/Sema/Lookup.h"
  #include "clang/Sema/ScopeInfo.h"
  #include "clang/Sema/Template.h"
-+#include "clang/Sema/TemplateInstObserver.h"
++#include "clang/Sema/TemplateInstCallbacks.h"
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
  #include "llvm/Support/ErrorHandling.h"
-@@ -5185,6 +5186,15 @@
+@@ -5191,6 +5192,15 @@
        // Try to recover by implicitly importing this module.
        createImplicitModuleImportForErrorRecovery(Loc, Owner);
      }
-+    else if (Def && TemplateInstObserverChain) {
++    else if (Def && TemplateInstCallbacksChain) {
 +      ActiveTemplateInstantiation TempInst;
 +      TempInst.Kind = ActiveTemplateInstantiation::Memoization;
 +      TempInst.Template = Def;
 +      TempInst.Entity = Def;
 +      TempInst.PointOfInstantiation = Loc;
-+      TemplateInstObserverChain->atTemplateBegin(*this, TempInst);
-+      TemplateInstObserverChain->atTemplateEnd(*this, TempInst);
++      TemplateInstCallbacksChain->atTemplateBegin(*this, TempInst);
++      TemplateInstCallbacksChain->atTemplateEnd(*this, TempInst);
 +    }
  
      // We lock in the inheritance model once somebody has asked us to ensure
