@@ -37,7 +37,7 @@ bool TemplightAction::BeginSourceFileAction(CompilerInstance &CI,
 
 std::string TemplightAction::CreateOutputFilename(
     CompilerInstance *CI,
-    const std::string& OptOutputName, const std::string& OptOutputFormat,
+    const std::string& OptOutputName, 
     bool OptInstProfiler, bool OptOutputToStdOut, bool OptMemoryProfile) {
   std::string result;
   
@@ -66,31 +66,7 @@ std::string TemplightAction::CreateOutputFilename(
   std::string postfix;
   if( result.rfind(".trace.") == std::string::npos ) {
     result += (OptMemoryProfile ? ".memory.trace." : ".trace.");
-    if ( ( OptOutputFormat.empty() ) || ( OptOutputFormat == "protobuf" ) ) {
-      result += "pbf";
-    }
-    else if ( OptOutputFormat == "xml" ) {
-      result += "xml";
-    }
-    else if ( OptOutputFormat == "text" ) {
-      result += "txt";
-    }
-    else if ( OptOutputFormat == "graphml" ) {
-      result += "graphml";
-    }
-    else if ( OptOutputFormat == "graphviz" ) {
-      result += "gv";
-    }
-    else if ( OptOutputFormat == "nestedxml" ) {
-      result += "xml";
-    }
-    else if ( OptOutputFormat == "yaml" ) {
-      result += "yaml";
-    }
-    else {
-      llvm::errs() << "Error: [Templight-Action] Unrecognized template trace format:" 
-                   << OptOutputFormat << "\n";
-    }
+    result += "pbf";
   }
   
   return result;
@@ -121,7 +97,7 @@ void TemplightAction::ExecuteAction() {
   
   if ( InstProfiler ) {
     TemplightTracer* p_t = new TemplightTracer(CI.getSema(), OutputFilename,
-      OutputFormat, MemoryProfile, OutputInSafeMode, IgnoreSystemInst, TraceTemplateOrigins);
+      MemoryProfile, OutputInSafeMode, IgnoreSystemInst);
     p_t->readBlacklists(BlackListFilename);
     TemplateInstantiationCallbacks::appendNewCallbacks(
       CI.getSema().TemplateInstCallbacksChain, p_t);

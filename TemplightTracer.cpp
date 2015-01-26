@@ -13,9 +13,6 @@
 #include "PrintableTemplightEntries.h"
 #include "TemplightEntryPrinter.h"
 
-// FIXME: Eventually these extra writers will be removed from templight program (only appear in converter).
-#include "TemplightExtraWriters.h"
-
 #include <clang/Basic/FileManager.h>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Sema/ActiveTemplateInst.h>
@@ -268,13 +265,10 @@ void TemplightTracer::atTemplateEndImpl(const Sema &TheSema,
 
 TemplightTracer::TemplightTracer(const Sema &TheSema, 
                                  std::string Output, 
-                                 const std::string& Format,
                                  bool Memory, bool Safemode, 
-                                 bool IgnoreSystem, 
-                                 bool TraceTemplateOrigins) :
+                                 bool IgnoreSystem) :
                                  MemoryFlag(Memory),
-                                 SafeModeFlag(Safemode),
-                                 TraceTemplateOriginsFlag(TraceTemplateOrigins) {
+                                 SafeModeFlag(Safemode) {
   
   Printer.reset(new TemplightTracer::TracePrinter(TheSema, Output, IgnoreSystem));
   
@@ -285,33 +279,7 @@ TemplightTracer::TemplightTracer(const Sema &TheSema,
     return;
   }
   
-  if ( ( Format.empty() ) || ( Format == "protobuf" ) ) {
-    Printer->takeWriter(new clang::TemplightProtobufWriter(*Printer->getTraceStream()));
-  } else 
-  if ( Format == "yaml" ) {
-    Printer->takeWriter(new clang::TemplightYamlWriter(*Printer->getTraceStream()));
-  } else 
-  if ( Format == "xml" ) {
-    Printer->takeWriter(new clang::TemplightXmlWriter(*Printer->getTraceStream()));
-  } else 
-  if ( Format == "text" ) {
-    Printer->takeWriter(new clang::TemplightTextWriter(*Printer->getTraceStream()));
-  } else 
-  if ( Format == "graphml" ) {
-    Printer->takeWriter(new clang::TemplightGraphMLWriter(*Printer->getTraceStream()));
-  } else 
-  if ( Format == "graphviz" ) {
-    Printer->takeWriter(new clang::TemplightGraphVizWriter(*Printer->getTraceStream()));
-  } else 
-  if ( Format == "nestedxml" ) {
-    Printer->takeWriter(new clang::TemplightNestedXMLWriter(*Printer->getTraceStream()));
-  } else 
-  {
-    llvm::errs() << "Error: [Templight-Tracer] Unrecognized template trace format:" << Format << "\n";
-    Printer.reset();
-    llvm::errs() << "Note: [Templight] Template trace has been disabled.\n";
-    return;
-  }
+  Printer->takeWriter(new clang::TemplightProtobufWriter(*Printer->getTraceStream()));
   
 }
 

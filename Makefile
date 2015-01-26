@@ -9,7 +9,7 @@
 CLANG_LEVEL := ../..
 
 TOOLNAME = templight
-TOOLALIAS = templight
+TOOLALIAS = templight++
 
 ifdef CLANG_ORDER_FILE
 TOOL_ORDER_FILE := $(CLANG_ORDER_FILE)

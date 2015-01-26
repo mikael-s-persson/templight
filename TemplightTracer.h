@@ -34,7 +34,6 @@ private:
   
   unsigned MemoryFlag : 1;
   unsigned SafeModeFlag : 1;
-  unsigned TraceTemplateOriginsFlag : 1;
   
   std::unique_ptr<TracePrinter> Printer;
   
@@ -44,11 +43,9 @@ public:
   /// The argument can be xml/yaml/text
   TemplightTracer(const Sema &TheSema, 
                   std::string Output = "", 
-                  const std::string& Format = "yaml",
                   bool Memory = false, 
                   bool Safemode = false,
-                  bool IgnoreSystem = false,
-                  bool TraceTemplateOrigins = false);
+                  bool IgnoreSystem = false);
   
   ~TemplightTracer() override;
   

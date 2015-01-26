@@ -104,16 +104,8 @@ static cl::opt<std::string> OutputFilename("output",
 static std::string LocalOutputFilename;
 static SmallVector<std::string, 32> TempOutputFiles;
 
-static cl::opt<std::string> OutputFormat("format",
-  cl::desc("Specify the format of Templight outputs (protobuf/yaml/xml/text/graphml/graphviz/nestedxml, default is protobuf)."),
-  cl::init("protobuf"), cl::cat(ClangTemplightCategory));
-
 static cl::opt<std::string> BlackListFilename("blacklist",
   cl::desc("Use regex expressions in <file> to filter out undesirable traces."),
-  cl::cat(ClangTemplightCategory));
-
-static cl::opt<bool> TraceTemplateOrigins("trace-origins",
-  cl::desc("Include, in the trace file, the origin (file location) of the templates from which the template instantiations occur."),
   cl::cat(ClangTemplightCategory));
 
 
@@ -125,9 +117,7 @@ static cl::Option* TemplightOptions[] = {
     &InstProfiler,
     &InteractiveDebug,
     &OutputFilename,
-    &OutputFormat,
-    &BlackListFilename,
-    &TraceTemplateOrigins};
+    &BlackListFilename};
 
 void PrintTemplightHelp() {
   // Compute the maximum argument length...
@@ -386,15 +376,13 @@ int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   Act->InstProfiler = InstProfiler;
   Act->OutputToStdOut = OutputToStdOut;
   Act->MemoryProfile = MemoryProfile;
-  Act->TraceTemplateOrigins = TraceTemplateOrigins;
   Act->OutputInSafeMode = OutputInSafeMode;
   Act->IgnoreSystemInst = IgnoreSystemInst;
   Act->InteractiveDebug = InteractiveDebug;
-  Act->OutputFormat = OutputFormat;
   Act->BlackListFilename = BlackListFilename;
   
   Act->OutputFilename = TemplightAction::CreateOutputFilename(
-    Clang, LocalOutputFilename, OutputFormat, 
+    Clang, LocalOutputFilename, 
     InstProfiler, OutputToStdOut, MemoryProfile);
   
   // Executing the templight action...
@@ -460,7 +448,7 @@ void ExecuteTemplightJobs(Driver &TheDriver, DiagnosticsEngine &Diags,
     
     LocalOutputFilename = ""; // Let the filename be created from options or output file name.
     std::string TemplightOutFile = TemplightAction::CreateOutputFilename(
-      Clang.get(), "", OutputFormat, InstProfiler, OutputToStdOut, MemoryProfile);
+      Clang.get(), "", InstProfiler, OutputToStdOut, MemoryProfile);
     // Check if templight filename is in a temporary path:
     llvm::SmallString<128> TDir;
     llvm::sys::path::system_temp_directory(true, TDir);
@@ -641,7 +629,7 @@ int main(int argc_, const char **argv_) {
       if ( OutputFilename.empty() ) 
         OutputFilename = "a";
       std::string FinalOutputFilename = TemplightAction::CreateOutputFilename(
-        nullptr, OutputFilename, OutputFormat, 
+        nullptr, OutputFilename, 
         InstProfiler, OutputToStdOut, MemoryProfile);
       if ( ( !FinalOutputFilename.empty() ) && ( FinalOutputFilename != "-" ) ) {
         std::error_code error;
