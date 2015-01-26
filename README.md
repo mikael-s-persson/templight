@@ -13,7 +13,6 @@ Templight is a Clang-based tool to profile the time and memory consumption of te
  - [Invoking Templight](#invoking-templight)
 - [Using the Templight Profiler](#using-the-templight-profiler)
  - [Default Output Location](#default-output-location)
- - [Converting the Output Format](converting-the-output-format)
 - [Using the Templight Debugger](#using-the-templight-debugger)
 - [Using Blacklists](#using-blacklists)
 - [Inspecting the profiles](#inspecting-the-profiles)
@@ -285,9 +284,13 @@ Here is an example blacklist file that uses some of the examples mentioned above
 
 ## Inspecting the profiles
 
-Any contribution or work towards such an application is more than welcomed! The formats of the traces being text-based and using fairly standard markup languages will hopefully facilitate the development of such applications.
+To begin to inspect the profiles, the starting point is probably to head over to the sister repository called [templight-tools](https://github.com/mikael-s-persson/templight-tools). There, you will find utilities to deal with the trace files produced by templight. In particular, you can use `templight-convert` to produce alternative formats, such as graphviz and callgrind, such that traces can be visualized. It is particularly recommended that you try out the "callgrind" output format, as it will allow the traces to be loaded in KCacheGrind for visualization.
+
+Any contribution or work towards applications to help inspect, analyse or visualize the profiles is more than welcomed!
 
 The [Templar application](https://github.com/schulmar/Templar) is one application that allows the user to open and inspect the traces produced by Templight.
+
+The [Metashell](https://github.com/sabel83/metashell) project is another application that provides inspection facilities for templight trace files. It is a whole different application altogether (not strictly just a trace inspector), but invokes templight under the hood to generate the template instantiation tree that it allows you to walk, along with the AST.
 
 ## Credits
 

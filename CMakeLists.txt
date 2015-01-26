@@ -28,7 +28,6 @@ add_clang_executable(templight
   )
 
 target_link_libraries(templight
-  templight-static
   clangBasic
   clangFrontend
   clangFrontendTool
