@@ -18,7 +18,14 @@ endif()
 
 set(bindir "${CLANGXX_DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/")
 set(templight "templight${EXECUTABLE_SUFFIX}")
+set(templightxx "templight++${EXECUTABLE_SUFFIX}")
 set(templight_cl "templight-cl${EXECUTABLE_SUFFIX}")
+
+message("Creating templight++ executable based on ${templight}")
+
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E ${CLANGXX_LINK_OR_COPY} "${templight}" "${templightxx}"
+  WORKING_DIRECTORY "${bindir}")
 
 message("Creating templight-cl executable based on ${templight}")
 
