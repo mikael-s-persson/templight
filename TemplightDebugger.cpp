@@ -1036,8 +1036,9 @@ void TemplightDebugger::finalizeImpl(const Sema &) {
 
 void TemplightDebugger::atTemplateBeginImpl(const Sema &TheSema, 
                           const ActiveTemplateInstantiation& Inst) {
-  if ( IgnoreSystemFlag && TheSema.getSourceManager()
-                            .isInSystemHeader(Inst.PointOfInstantiation) )
+  if ( IgnoreSystemFlag && !Inst.PointOfInstantiation.isInvalid() && 
+       TheSema.getSourceManager()
+         .isInSystemHeader(Inst.PointOfInstantiation) )
     return;
   
   TemplateDebuggerEntry Entry(
@@ -1048,8 +1049,9 @@ void TemplightDebugger::atTemplateBeginImpl(const Sema &TheSema,
 
 void TemplightDebugger::atTemplateEndImpl(const Sema &TheSema, 
                           const ActiveTemplateInstantiation& Inst) {
-  if ( IgnoreSystemFlag && TheSema.getSourceManager()
-                            .isInSystemHeader(Inst.PointOfInstantiation) )
+  if ( IgnoreSystemFlag && !Inst.PointOfInstantiation.isInvalid() && 
+       TheSema.getSourceManager()
+         .isInSystemHeader(Inst.PointOfInstantiation) )
     return;
   
   TemplateDebuggerEntry Entry(

@@ -129,8 +129,9 @@ public:
   };
   
   void printOrSkipEntry(RawTemplightTraceEntry &Entry) {
-    if ( IgnoreSystemFlag && TheSema.getSourceManager()
-                                .isInSystemHeader(Entry.PointOfInstantiation) ) {
+    if ( IgnoreSystemFlag && !Entry.PointOfInstantiation.isInvalid() && 
+         TheSema.getSourceManager()
+           .isInSystemHeader(Entry.PointOfInstantiation) ) {
       skipRawEntry(Entry); // recursively skip all entries until end of this one.
     } else {
       if ( Entry.IsTemplateBegin ) {
