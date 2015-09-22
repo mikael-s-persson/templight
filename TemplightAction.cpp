@@ -45,7 +45,7 @@ std::string TemplightAction::CreateOutputFilename(
     return result; // no need for an output-filename.
   
   if ( OptOutputToStdOut ) {
-    result = "-";
+    return "-";
   } else if ( CI && OptOutputName.empty() ) {
     result = CI->getFrontendOpts().OutputFile;
   } else {
@@ -63,7 +63,6 @@ std::string TemplightAction::CreateOutputFilename(
     }
   }
   
-  std::string postfix;
   if( result.rfind(".trace.") == std::string::npos ) {
     result += (OptMemoryProfile ? ".memory.trace." : ".trace.");
     result += "pbf";
