@@ -1,6 +1,50 @@
+Index: include/clang/Driver/CC1Options.td
+===================================================================
+--- include/clang/Driver/CC1Options.td	(revision 251760)
++++ include/clang/Driver/CC1Options.td	(working copy)
+@@ -422,6 +422,8 @@
+   HelpText<"Build ASTs and print the list of declaration node qualified names">;
+ def ast_dump : Flag<["-"], "ast-dump">,
+   HelpText<"Build ASTs and then debug dump them">;
++def templight_dump : Flag<["-"], "templight-dump">,
++  HelpText<"Dump templight information to stdout">;
+ def ast_dump_lookups : Flag<["-"], "ast-dump-lookups">,
+   HelpText<"Build ASTs and then debug dump their name lookup tables">;
+ def ast_view : Flag<["-"], "ast-view">,
+Index: include/clang/Frontend/FrontendActions.h
+===================================================================
+--- include/clang/Frontend/FrontendActions.h	(revision 251760)
++++ include/clang/Frontend/FrontendActions.h	(working copy)
+@@ -158,6 +158,14 @@
+   bool hasCodeCompletionSupport() const override { return false; }
+ };
+ 
++class TemplightDumpAction : public ASTFrontendAction {
++protected:
++  std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
++                                                 StringRef InFile) override;
++
++  void ExecuteAction() override;
++};
++
+ /**
+  * \brief Frontend action adaptor that merges ASTs together.
+  *
+Index: include/clang/Frontend/FrontendOptions.h
+===================================================================
+--- include/clang/Frontend/FrontendOptions.h	(revision 251760)
++++ include/clang/Frontend/FrontendOptions.h	(working copy)
+@@ -53,6 +53,7 @@
+     RewriteObjC,            ///< ObjC->C Rewriter.
+     RewriteTest,            ///< Rewriter playground
+     RunAnalysis,            ///< Run one or more source code analyses.
++    TemplightDump,          ///< Dump template instantiations
+     MigrateSource,          ///< Run migrator.
+     RunPreprocessorOnly     ///< Just lex, no output.
+   };
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 242645)
+--- include/clang/FrontendTool/Utils.h	(revision 251760)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
 @@ -18,7 +18,10 @@
  namespace clang {
@@ -151,7 +195,7 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 +#endif
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 242645)
+--- include/clang/Sema/Sema.h	(revision 251760)
 +++ include/clang/Sema/Sema.h	(working copy)
 @@ -31,6 +31,7 @@
  #include "clang/Basic/Specifiers.h"
@@ -169,7 +213,7 @@ Index: include/clang/Sema/Sema.h
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -6409,120 +6411,6 @@
+@@ -6412,120 +6414,6 @@
                                 bool RelativeToPrimary = false,
                                 const FunctionDecl *Pattern = nullptr);
  
@@ -290,7 +334,7 @@ Index: include/clang/Sema/Sema.h
    /// \brief List of active template instantiations.
    ///
    /// This vector is treated as a stack. As one template instantiation
-@@ -6567,6 +6455,13 @@
+@@ -6570,6 +6458,13 @@
    /// to implement it anywhere else.
    ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
  
@@ -405,9 +449,198 @@ Index: include/clang/Sema/TemplateInstCallbacks.h
 +}
 +
 +#endif
+Index: lib/Frontend/CompilerInvocation.cpp
+===================================================================
+--- lib/Frontend/CompilerInvocation.cpp	(revision 251760)
++++ lib/Frontend/CompilerInvocation.cpp	(working copy)
+@@ -892,6 +892,8 @@
+       Opts.ProgramAction = frontend::PrintPreamble; break;
+     case OPT_E:
+       Opts.ProgramAction = frontend::PrintPreprocessedInput; break;
++    case OPT_templight_dump:
++      Opts.ProgramAction = frontend::TemplightDump; break;
+     case OPT_rewrite_macros:
+       Opts.ProgramAction = frontend::RewriteMacros; break;
+     case OPT_rewrite_objc:
+@@ -1861,6 +1863,7 @@
+   case frontend::RewriteObjC:
+   case frontend::RewriteTest:
+   case frontend::RunAnalysis:
++  case frontend::TemplightDump:
+   case frontend::MigrateSource:
+     Opts.ShowCPP = 0;
+     break;
+Index: lib/Frontend/FrontendActions.cpp
+===================================================================
+--- lib/Frontend/FrontendActions.cpp	(revision 251760)
++++ lib/Frontend/FrontendActions.cpp	(working copy)
+@@ -20,14 +20,19 @@
+ #include "clang/Lex/Pragma.h"
+ #include "clang/Lex/Preprocessor.h"
+ #include "clang/Parse/Parser.h"
++#include "clang/Sema/Sema.h"
++#include "clang/Sema/TemplateInstCallbacks.h"
+ #include "clang/Serialization/ASTReader.h"
+ #include "clang/Serialization/ASTWriter.h"
+ #include "llvm/Support/FileSystem.h"
+ #include "llvm/Support/MemoryBuffer.h"
+ #include "llvm/Support/raw_ostream.h"
++#include "llvm/Support/YAMLTraits.h"
+ #include <memory>
+ #include <system_error>
+ 
++#include <iostream>
++
+ using namespace clang;
+ 
+ //===----------------------------------------------------------------------===//
+@@ -435,6 +440,143 @@
+ }
+ 
+ namespace {
++  struct TemplightEntry
++  {
++    std::string Name;
++    std::string Kind;
++    std::string Event;
++    std::string PointOfInstantiation;
++  };
++}
++
++namespace llvm {
++namespace yaml {
++  template <>
++  struct MappingTraits<TemplightEntry> {
++    static void mapping(IO &io,
++      TemplightEntry &fields) {
++      io.mapRequired("name", fields.Name);
++      io.mapRequired("kind", fields.Kind);
++      io.mapRequired("event", fields.Event);
++      io.mapRequired("poi", fields.PointOfInstantiation);
++    }
++  };
++}
++}
++
++namespace {
++  class DefaultTemplateInstCallbacks : public TemplateInstantiationCallbacks {
++  protected:
++    virtual void atTemplateBeginImpl(const Sema &TheSema,
++      const ActiveTemplateInstantiation &Inst) override
++    {
++      DisplayTemplightEntry<true>(std::cout, TheSema, Inst);
++    }
++
++    virtual void atTemplateEndImpl(const Sema &TheSema,
++      const ActiveTemplateInstantiation &Inst) override
++    {
++      DisplayTemplightEntry<false>(std::cout, TheSema, Inst);
++    }
++  private:
++    static std::string ToString(
++      ActiveTemplateInstantiation::InstantiationKind Kind) {
++      switch (Kind) {
++      case ActiveTemplateInstantiation::TemplateInstantiation:
++        return "TemplateInstantiation";
++      case ActiveTemplateInstantiation::DefaultTemplateArgumentInstantiation:
++        return "DefaultTemplateArgumentInstantiation";
++      case ActiveTemplateInstantiation::DefaultFunctionArgumentInstantiation:
++        return "DefaultFunctionArgumentInstantiation";
++      case ActiveTemplateInstantiation::ExplicitTemplateArgumentSubstitution:
++        return "ExplicitTemplateArgumentSubstitution";
++      case ActiveTemplateInstantiation::DeducedTemplateArgumentSubstitution:
++        return "DeducedTemplateArgumentSubstitution";
++      case ActiveTemplateInstantiation::PriorTemplateArgumentSubstitution:
++        return "PriorTemplateArgumentSubstitution";
++      case ActiveTemplateInstantiation::DefaultTemplateArgumentChecking:
++        return "DefaultTemplateArgumentChecking";
++      case ActiveTemplateInstantiation::ExceptionSpecInstantiation:
++        return "ExceptionSpecInstantiation";
++      case ActiveTemplateInstantiation::Memoization:
++        return "Memoization";
++      }
++      return "";
++    }
++
++    template <bool BeginInstantiation>
++    static void DisplayTemplightEntry(std::ostream &Out, const Sema &TheSema,
++      const ActiveTemplateInstantiation &Inst)
++    {
++      std::string YAML;
++      {
++        llvm::raw_string_ostream OS(YAML);
++        llvm::yaml::Output YO(OS);
++        TemplightEntry Entry =
++          GetTemplightEntry<BeginInstantiation>(TheSema, Inst);
++        llvm::yaml::yamlize(YO, Entry, true);
++      }
++      Out << "---" << YAML << "\n";
++    }
++
++    template <bool BeginInstantiation>
++    static TemplightEntry GetTemplightEntry(const Sema &TheSema,
++      const ActiveTemplateInstantiation &Inst)
++    {
++      TemplightEntry Entry;
++      Entry.Kind = ToString(Inst.Kind);
++      Entry.Event = BeginInstantiation ? "Begin" : "End";
++      if (NamedDecl* NamedTemplate = dyn_cast_or_null<NamedDecl>(Inst.Entity))
++      {
++        llvm::raw_string_ostream OS(Entry.Name);
++        NamedTemplate->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
++      }
++      const PresumedLoc Loc =
++        TheSema.getSourceManager().getPresumedLoc(Inst.PointOfInstantiation);
++      if (!Loc.isInvalid())
++      {
++        Entry.PointOfInstantiation =
++          std::string(Loc.getFilename())
++          + ":" + std::to_string(Loc.getLine())
++          + ":" + std::to_string(Loc.getColumn());
++      }
++      return Entry;
++    }
++  };
++}
++
++std::unique_ptr<ASTConsumer>
++TemplightDumpAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
++  return llvm::make_unique<ASTConsumer>();
++}
++
++void TemplightDumpAction::ExecuteAction() {
++  CompilerInstance &CI = getCompilerInstance();
++
++  // This part is normally done by ASTFrontEndAction, but needs to happen
++  //  before Templight observers can be created ----------------------->>
++  // FIXME: Move the truncation aspect of this into Sema, we delayed this till
++  // here so the source manager would be initialized.
++  if (hasCodeCompletionSupport() &&
++      !CI.getFrontendOpts().CodeCompletionAt.FileName.empty())
++    CI.createCodeCompletionConsumer();
++
++  // Use a code completion consumer?
++  CodeCompleteConsumer *CompletionConsumer = nullptr;
++  if (CI.hasCodeCompletionConsumer())
++    CompletionConsumer = &CI.getCodeCompletionConsumer();
++
++  if (!CI.hasSema())
++    CI.createSema(getTranslationUnitKind(), CompletionConsumer);
++  //<<--------------------------------------------------------------
++
++  TemplateInstantiationCallbacks::appendNewCallbacks(
++    CI.getSema().TemplateInstCallbacksChain,
++    new DefaultTemplateInstCallbacks());
++  ASTFrontendAction::ExecuteAction();
++}
++
++namespace {
+   /// \brief AST reader listener that dumps module information for a module
+   /// file.
+   class DumpModuleInfoListener : public ASTReaderListener {
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 242645)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 251760)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -31,6 +31,8 @@
  using namespace clang;
@@ -418,7 +651,15 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
  static FrontendAction *CreateFrontendBaseAction(CompilerInstance &CI) {
    using namespace clang::frontend;
    StringRef Action("unknown");
-@@ -113,7 +115,7 @@
+@@ -58,6 +60,7 @@
+   case ParseSyntaxOnly:        return new SyntaxOnlyAction();
+   case ModuleFileInfo:         return new DumpModuleInfoAction();
+   case VerifyPCH:              return new VerifyPCHAction();
++  case TemplightDump:          return new TemplightDumpAction();
+ 
+   case PluginAction: {
+     for (FrontendPluginRegistry::iterator it =
+@@ -113,7 +116,7 @@
  #endif
  }
  
@@ -427,7 +668,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
    // Create the underlying action.
    FrontendAction *Act = CreateFrontendBaseAction(CI);
    if (!Act)
-@@ -161,7 +163,7 @@
+@@ -161,7 +164,7 @@
    return Act;
  }
  
@@ -436,7 +677,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
    // Honor -help.
    if (Clang->getFrontendOpts().ShowHelp) {
      std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
-@@ -224,3 +226,5 @@
+@@ -224,3 +227,5 @@
      BuryPointer(std::move(Act));
    return Success;
  }
@@ -444,7 +685,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 242645)
+--- lib/Parse/ParseAST.cpp	(revision 251760)
 +++ lib/Parse/ParseAST.cpp	(working copy)
 @@ -22,6 +22,7 @@
  #include "clang/Sema/ExternalSemaSource.h"
@@ -454,7 +695,7 @@ Index: lib/Parse/ParseAST.cpp
  #include "llvm/Support/CrashRecoveryContext.h"
  #include <cstdio>
  #include <memory>
-@@ -107,6 +108,11 @@
+@@ -122,6 +123,11 @@
    bool OldCollectStats = PrintStats;
    std::swap(OldCollectStats, S.CollectStats);
  
@@ -466,7 +707,7 @@ Index: lib/Parse/ParseAST.cpp
    ASTConsumer *Consumer = &S.getASTConsumer();
  
    std::unique_ptr<Parser> ParseOP(
-@@ -150,6 +156,14 @@
+@@ -167,6 +173,14 @@
    
    Consumer->HandleTranslationUnit(S.getASTContext());
  
@@ -562,7 +803,7 @@ Index: lib/Sema/ActiveTemplateInst.cpp
 +
 Index: lib/Sema/CMakeLists.txt
 ===================================================================
---- lib/Sema/CMakeLists.txt	(revision 242645)
+--- lib/Sema/CMakeLists.txt	(revision 251760)
 +++ lib/Sema/CMakeLists.txt	(working copy)
 @@ -3,6 +3,7 @@
    )
@@ -574,7 +815,7 @@ Index: lib/Sema/CMakeLists.txt
    CodeCompleteConsumer.cpp
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 242645)
+--- lib/Sema/Sema.cpp	(revision 251760)
 +++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/ScopeInfo.h"
@@ -586,7 +827,7 @@ Index: lib/Sema/Sema.cpp
  #include "llvm/ADT/SmallSet.h"
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 242645)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 251760)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
@@ -663,7 +904,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
  
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 242645)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 251760)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -22,6 +22,7 @@
  #include "clang/Sema/Lookup.h"
@@ -673,7 +914,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
  using namespace clang;
  
-@@ -3222,7 +3223,7 @@
+@@ -3242,7 +3243,7 @@
    // into a template instantiation for this specific function template
    // specialization, which is not a SFINAE context, so that we diagnose any
    // further errors in the declaration itself.
@@ -682,7 +923,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
    ActiveInstType &ActiveInst = SemaRef.ActiveTemplateInstantiations.back();
    if (ActiveInst.Kind == ActiveInstType::ExplicitTemplateArgumentSubstitution ||
        ActiveInst.Kind == ActiveInstType::DeducedTemplateArgumentSubstitution) {
-@@ -3231,8 +3232,12 @@
+@@ -3251,8 +3252,12 @@
        assert(FunTmpl->getTemplatedDecl() == Tmpl &&
               "Deduction from the wrong function template?");
        (void) FunTmpl;
@@ -697,7 +938,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 242645)
+--- lib/Sema/SemaType.cpp	(revision 251760)
 +++ lib/Sema/SemaType.cpp	(working copy)
 @@ -32,6 +32,7 @@
  #include "clang/Sema/Lookup.h"
@@ -707,7 +948,7 @@ Index: lib/Sema/SemaType.cpp
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
  #include "llvm/Support/ErrorHandling.h"
-@@ -6472,6 +6473,15 @@
+@@ -6547,6 +6548,15 @@
      if (!Diagnoser.Suppressed && Def &&
          !hasVisibleDefinition(Def, &SuggestedDef, /*OnlyNeedComplete*/true))
        diagnoseMissingImport(Loc, SuggestedDef, /*NeedDefinition*/true);
@@ -721,5 +962,206 @@ Index: lib/Sema/SemaType.cpp
 +      TemplateInstCallbacksChain->atTemplateEnd(*this, TempInst);
 +    }
  
-     // We lock in the inheritance model once somebody has asked us to ensure
-     // that a pointer-to-member type is complete.
+     return false;
+   }
+Index: test/Sema/templight-memoization.cpp
+===================================================================
+--- test/Sema/templight-memoization.cpp	(revision 0)
++++ test/Sema/templight-memoization.cpp	(working copy)
+@@ -0,0 +1,32 @@
++// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
++
++template <class T>
++struct foo {};
++
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<int>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+6]]{{:10'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<int>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+1]]{{:10'$}}
++foo<int> x;
++
++// CHECK-LABEL: {{^---$}}
++// CHECK-LABEL: {{^---$}}
++
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<int>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+6]]{{:10'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<int>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+1]]{{:10'$}}
++foo<int> y;
++
+Index: test/Sema/templight-nested-memoization.cpp
+===================================================================
+--- test/Sema/templight-nested-memoization.cpp	(revision 0)
++++ test/Sema/templight-nested-memoization.cpp	(working copy)
+@@ -0,0 +1,92 @@
++// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
++
++template <int N>
++struct fib
++{
++  static const int value = fib<N-1>::value + fib<N-2>::value;
++};
++
++template <>
++struct fib<0>
++{
++  static const int value = 1;
++};
++
++template <>
++struct fib<1>
++{
++  static const int value = 1;
++};
++
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<4>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+66]]{{:8'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<3>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<1>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<1>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<0>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<0>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<1>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<1>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<3>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<4>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+1]]{{:8'$}}
++fib<4> x;
++
+Index: test/Sema/templight-nested-template-instantiation.cpp
+===================================================================
+--- test/Sema/templight-nested-template-instantiation.cpp	(revision 0)
++++ test/Sema/templight-nested-template-instantiation.cpp	(working copy)
+@@ -0,0 +1,40 @@
++// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
++
++template <int N>
++struct foo : foo<N - 1> {};
++
++template <>
++struct foo<0> {};
++
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+26]]{{:8'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<1>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<0>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<0>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<1>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+1]]{{:8'$}}
++foo<2> x;
++
+Index: test/Sema/templight-one-instantiation.cpp
+===================================================================
+--- test/Sema/templight-one-instantiation.cpp	(revision 0)
++++ test/Sema/templight-one-instantiation.cpp	(working copy)
+@@ -0,0 +1,17 @@
++// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
++
++template <class T>
++struct foo {};
++
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<int>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:}}[[@LINE+6]]{{:10'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<int>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:}}[[@LINE+1]]{{:10'$}}
++foo<int> x;
++
