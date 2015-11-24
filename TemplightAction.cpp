@@ -71,30 +71,35 @@ std::string TemplightAction::CreateOutputFilename(
   return result;
 }
 
+void TemplightAction::EnsureHasSema(CompilerInstance& CI) {
+  if (!CI.hasSema()) {
+    // This part is normally done by ASTFrontEndAction, but needs to happen
+    //  before Templight observers can be created ----------------------->>
+    // FIXME: Move the truncation aspect of this into Sema, we delayed this till
+    // here so the source manager would be initialized.
+    if (hasCodeCompletionSupport() &&
+        !CI.getFrontendOpts().CodeCompletionAt.FileName.empty())
+      CI.createCodeCompletionConsumer();
+    
+    // Use a code completion consumer?
+    CodeCompleteConsumer *CompletionConsumer = nullptr;
+    if (CI.hasCodeCompletionConsumer())
+      CompletionConsumer = &CI.getCodeCompletionConsumer();
+    
+    CI.createSema(getTranslationUnitKind(), CompletionConsumer);
+    //<<--------------------------------------------------------------
+  }
+}
+
 void TemplightAction::ExecuteAction() {
   
   CompilerInstance &CI = WrapperFrontendAction::getCompilerInstance();
   if (!CI.hasPreprocessor())
     return;
   
-  // This part is normally done by ASTFrontEndAction, but needs to happen 
-  //  before Templight observers can be created ----------------------->>
-  // FIXME: Move the truncation aspect of this into Sema, we delayed this till
-  // here so the source manager would be initialized.
-  if (hasCodeCompletionSupport() &&
-      !CI.getFrontendOpts().CodeCompletionAt.FileName.empty())
-    CI.createCodeCompletionConsumer();
-  
-  // Use a code completion consumer?
-  CodeCompleteConsumer *CompletionConsumer = nullptr;
-  if (CI.hasCodeCompletionConsumer())
-    CompletionConsumer = &CI.getCodeCompletionConsumer();
-  
-  if (!CI.hasSema())
-    CI.createSema(getTranslationUnitKind(), CompletionConsumer);
-  //<<--------------------------------------------------------------
-  
   if ( InstProfiler ) {
+    EnsureHasSema(CI);
+
     TemplightTracer* p_t = new TemplightTracer(CI.getSema(), OutputFilename,
       MemoryProfile, OutputInSafeMode, IgnoreSystemInst);
     p_t->readBlacklists(BlackListFilename);
@@ -102,6 +107,8 @@ void TemplightAction::ExecuteAction() {
       CI.getSema().TemplateInstCallbacksChain, p_t);
   }
   if ( InteractiveDebug ) {
+    EnsureHasSema(CI);
+
     TemplightDebugger* p_t = new TemplightDebugger(CI.getSema(), 
       MemoryProfile, IgnoreSystemInst);
     p_t->readBlacklists(BlackListFilename);
