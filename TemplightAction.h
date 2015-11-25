@@ -52,6 +52,9 @@ public:
   unsigned InteractiveDebug : 1;
   std::string OutputFilename;
   std::string BlackListFilename;
+
+private:
+  void EnsureHasSema(CompilerInstance& CI);
 };
 
 }
