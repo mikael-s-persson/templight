@@ -9,7 +9,7 @@
 
 #include "TemplightDebugger.h"
 
-#include "clang/AST/DataRecursiveASTVisitor.h"
+#include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclLookups.h"
 #include "clang/AST/DeclTemplate.h"
@@ -117,9 +117,9 @@ void fillWithTemplateArgumentPrints(const TemplateArgument *Args,
 
 
 
-class TemplateArgRecorder : public DataRecursiveASTVisitor<TemplateArgRecorder> {
+class TemplateArgRecorder : public RecursiveASTVisitor<TemplateArgRecorder> {
 public:
-  typedef DataRecursiveASTVisitor<TemplateArgRecorder> Base;
+  typedef RecursiveASTVisitor<TemplateArgRecorder> Base;
   
   const Sema &TheSema;
   
