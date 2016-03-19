@@ -410,11 +410,11 @@ void ExecuteTemplightCommand(Driver &TheDriver, DiagnosticsEngine &Diags,
     Compilation &C, Command &J, const char* Argv0,
     SmallVector<std::pair<int, const Command *>, 4>& FailingCommands) {
   
-  // Since argumentsFitWithinSystemLimits() may underestimate system's capacity
+  // Since commandLineFitsWithinSystemLimits() may underestimate system's capacity
   // if the tool does not support response files, there is a chance/ that things
   // will just work without a response file, so we silently just skip it.
   if ( J.getCreator().getResponseFilesSupport() != Tool::RF_None &&
-       llvm::sys::argumentsFitWithinSystemLimits(J.getArguments()) ) {
+       llvm::sys::commandLineFitsWithinSystemLimits(J.getExecutable(), J.getArguments()) ) {
     std::string TmpName = TheDriver.GetTemporaryPath("response", "txt");
     J.setResponseFile(C.addTempFile(C.getArgs().MakeArgString(TmpName.c_str())));
   }
