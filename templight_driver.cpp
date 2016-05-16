@@ -88,7 +88,7 @@ static cl::opt<bool> OutputInSafeMode("safe-mode",
   cl::cat(ClangTemplightCategory));
 
 static cl::opt<bool> IgnoreSystemInst("ignore-system",
-  cl::desc("Ignore any template instantiation coming from \n" 
+  cl::desc("Ignore any template instantiation coming from \n"
            "system-includes (-isystem)."),
   cl::cat(ClangTemplightCategory));
 
@@ -128,9 +128,9 @@ void PrintTemplightHelp() {
   std::size_t MaxArgLen = 0;
   for (std::size_t i = 0, e = TemplightOptNum; i != e; ++i)
     MaxArgLen = std::max(MaxArgLen, TemplightOptions[i]->getOptionWidth());
-  
+
   llvm::outs() << '\n' << ClangTemplightCategory.getName() << "\n\n";
-  
+
   for (std::size_t i = 0, e = TemplightOptNum; i != e; ++i)
     TemplightOptions[i]->printOptionInfo(MaxArgLen);
   llvm::outs() << '\n';
@@ -320,17 +320,17 @@ static void SetInstallDir(SmallVectorImpl<const char *> &argv,
 }
 
 
-static 
+static
 int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   // Honor -help.
   if (Clang->getFrontendOpts().ShowHelp) {
-    
+
     // Print the help for the general clang options:
     std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
     Opts->PrintHelp(llvm::outs(), "templight",
                     "Template Profiler and Debugger based on LLVM 'Clang' Compiler: http://clang.llvm.org",
                     /*Include=*/ driver::options::CC1Option, /*Exclude=*/ 0);
-    
+
     return 0;
   }
 
@@ -377,12 +377,12 @@ int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   // If there were errors in processing arguments, don't do anything else.
   if (Clang->getDiagnostics().hasErrorOccurred())
     return 1;
-  
+
   // Create and execute the frontend action.
   std::unique_ptr<TemplightAction> Act(new TemplightAction(CreateFrontendAction(*Clang)));
   if (!Act)
     return 1;
-  
+
   // Setting up templight action object parameters...
   Act->InstProfiler = InstProfiler;
   Act->OutputToStdOut = OutputToStdOut;
@@ -391,11 +391,11 @@ int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   Act->IgnoreSystemInst = IgnoreSystemInst;
   Act->InteractiveDebug = InteractiveDebug;
   Act->BlackListFilename = BlackListFilename;
-  
+
   Act->OutputFilename = TemplightAction::CreateOutputFilename(
-    Clang, LocalOutputFilename, 
+    Clang, LocalOutputFilename,
     InstProfiler, OutputToStdOut, MemoryProfile);
-  
+
   // Executing the templight action...
   bool Success = Clang->ExecuteAction(*Act);
   if (Clang->getFrontendOpts().DisableFree)
@@ -405,11 +405,11 @@ int ExecuteTemplightInvocation(CompilerInstance *Clang) {
 
 
 
-static 
-void ExecuteTemplightCommand(Driver &TheDriver, DiagnosticsEngine &Diags, 
+static
+void ExecuteTemplightCommand(Driver &TheDriver, DiagnosticsEngine &Diags,
     Compilation &C, Command &J, const char* Argv0,
     SmallVector<std::pair<int, const Command *>, 4>& FailingCommands) {
-  
+
   // Since commandLineFitsWithinSystemLimits() may underestimate system's capacity
   // if the tool does not support response files, there is a chance/ that things
   // will just work without a response file, so we silently just skip it.
@@ -418,36 +418,36 @@ void ExecuteTemplightCommand(Driver &TheDriver, DiagnosticsEngine &Diags,
     std::string TmpName = TheDriver.GetTemporaryPath("response", "txt");
     J.setResponseFile(C.addTempFile(C.getArgs().MakeArgString(TmpName.c_str())));
   }
-  
+
   if ( StringRef(J.getCreator().getName()) == "clang" ) {
     // Initialize a compiler invocation object from the clang (-cc1) arguments.
     const ArgStringList &cc_arguments = J.getArguments();
     const char** args_start = const_cast<const char**>(cc_arguments.data());
     const char** args_end = args_start + cc_arguments.size();
-    
+
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
-    
+
     int Res = !CompilerInvocation::CreateFromArgs(
         Clang->getInvocation(), args_start, args_end, Diags);
     if(Res)
       FailingCommands.push_back(std::make_pair(Res, &J));
-    
+
     Clang->getFrontendOpts().DisableFree = false;
-    
+
     // Infer the builtin include path if unspecified.
     void *GetExecutablePathVP = (void *)(intptr_t) GetExecutablePath;
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
         Clang->getHeaderSearchOpts().ResourceDir.empty())
       Clang->getHeaderSearchOpts().ResourceDir =
         CompilerInvocation::GetResourcesPath(Argv0, GetExecutablePathVP);
-    
+
     // Create the compilers actual diagnostics engine.
     Clang->createDiagnostics();
     if (!Clang->hasDiagnostics()) {
       FailingCommands.push_back(std::make_pair(1, &J));
       return;
     }
-    
+
     LocalOutputFilename = ""; // Let the filename be created from options or output file name.
     std::string TemplightOutFile = TemplightAction::CreateOutputFilename(
       Clang.get(), "", InstProfiler, OutputToStdOut, MemoryProfile);
@@ -458,20 +458,20 @@ void ExecuteTemplightCommand(Driver &TheDriver, DiagnosticsEngine &Diags,
       C.addTempFile(TemplightOutFile.c_str());
       TempOutputFiles.push_back(TemplightOutFile);
     }
-    
+
     // Execute the frontend actions.
     Res = ExecuteTemplightInvocation(Clang.get());
     if(Res)
       FailingCommands.push_back(std::make_pair(Res, &J));
-    
+
   } else {
-    
+
     const Command *FailingCommand = nullptr;
     if (int Res = C.ExecuteCommand(J, FailingCommand))
       FailingCommands.push_back(std::make_pair(Res, FailingCommand));
-    
+
   }
-  
+
 }
 
 
@@ -525,7 +525,7 @@ int main(int argc_, const char **argv_) {
   templight_argv.push_back(argv[0]);
   clang_argv.push_back(argv[0]);
   for (int i = 1, size = argv.size(); i < size; /* in loop */ ) {
-    if ((argv[i] != nullptr) && 
+    if ((argv[i] != nullptr) &&
         (strcmp(argv[i], "-Xtemplight") == 0)) {
       while( i < size - 1 && argv[++i] == nullptr ) /* skip EOLs */ ;
       templight_argv.push_back(argv[i]);   // the word after -Xtemplight
@@ -533,8 +533,8 @@ int main(int argc_, const char **argv_) {
         break;
       while( i < size - 1 && argv[++i] == nullptr ) /* skip EOLs */ ;
     } else {
-      if ((argv[i] != nullptr) && 
-          ((strcmp(argv[i], "-help") == 0) || 
+      if ((argv[i] != nullptr) &&
+          ((strcmp(argv[i], "-help") == 0) ||
            (strcmp(argv[i], "--help") == 0))) {
         // Print the help for the templight options:
         PrintTemplightHelp();
@@ -542,11 +542,11 @@ int main(int argc_, const char **argv_) {
       clang_argv.push_back(argv[i++]);  // also leave -help to driver (to print its help info too)
     }
   }
-  
+
   cl::ParseCommandLineOptions(
       templight_argv.size(), &templight_argv[0],
       "A tool to profile template instantiations in C++ code.\n");
-  
+
   bool CanonicalPrefixes = true;
   for (int i = 1, size = clang_argv.size(); i < size; ++i) {
     // Skip end-of-line response file markers
@@ -583,19 +583,19 @@ int main(int argc_, const char **argv_) {
 
   // Prepare a variable for the return value:
   int Res = 0;
-  
+
   void *GetExecutablePathVP = (void *)(intptr_t) GetExecutablePath;
-  
+
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
   llvm::InitializeAllAsmPrinters();
   llvm::InitializeAllAsmParsers();
-  
+
 #ifdef LINK_POLLY_INTO_TOOLS
   llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
   polly::initializePollyPasses(Registry);
 #endif
-  
+
   // Handle -cc1 integrated tools, even if -cc1 was expanded from a response
   // file.
   auto FirstArg = std::find_if(clang_argv.begin() + 1, clang_argv.end(),
@@ -607,27 +607,27 @@ int main(int argc_, const char **argv_) {
       auto newEnd = std::remove(clang_argv.begin(), clang_argv.end(), nullptr);
       clang_argv.resize(newEnd - clang_argv.begin());
     }
-    
+
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
-    
+
     Res = !CompilerInvocation::CreateFromArgs(
         Clang->getInvocation(), clang_argv.begin() + 2, clang_argv.end(), Diags);
-    
+
     // Infer the builtin include path if unspecified.
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
         Clang->getHeaderSearchOpts().ResourceDir.empty())
       Clang->getHeaderSearchOpts().ResourceDir =
         CompilerInvocation::GetResourcesPath(clang_argv[0], GetExecutablePathVP);
-    
+
     // Create the compilers actual diagnostics engine.
     Clang->createDiagnostics();
     if (!Clang->hasDiagnostics()) {
       Res = 1;
       goto cleanup;
     }
-    
+
     LocalOutputFilename = OutputFilename;
-    
+
     // Execute the frontend actions.
     Res = ExecuteTemplightInvocation(Clang.get());
 
@@ -637,34 +637,34 @@ int main(int argc_, const char **argv_) {
         llvm::PrintStatistics();
       BuryPointer(std::move(Clang));
     }
-    
+
   } else {
-    
+
     Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags);
     TheDriver.setTitle("templight");
     SetInstallDir(clang_argv, TheDriver);
-    
+
     std::set<std::string> SavedStrings;
     insertArgsFromProgramName(ProgName, DS, clang_argv, SavedStrings);
-    
+
     SetBackdoorDriverOutputsFromEnvVars(TheDriver);
-    
+
     std::unique_ptr<Compilation> C(TheDriver.BuildCompilation(clang_argv));
     if(!C.get()) {
       Res = 1;
       goto cleanup;
     }
-    
+
     SmallVector<std::pair<int, const Command *>, 4> FailingCommands;
     for (auto &J : C->getJobs())
       ExecuteTemplightCommand(TheDriver, Diags, *C, J, clang_argv[0], FailingCommands);
-    
+
     // Merge all the temp files into a single output file:
     if ( ! TempOutputFiles.empty() ) {
-      if ( OutputFilename.empty() ) 
+      if ( OutputFilename.empty() )
         OutputFilename = "a";
       std::string FinalOutputFilename = TemplightAction::CreateOutputFilename(
-        nullptr, OutputFilename, 
+        nullptr, OutputFilename,
         InstProfiler, OutputToStdOut, MemoryProfile);
       if ( ( !FinalOutputFilename.empty() ) && ( FinalOutputFilename != "-" ) ) {
         std::error_code error;
@@ -674,20 +674,20 @@ int main(int argc_, const char **argv_) {
             "Error: [Templight] Can not open file to write trace of template instantiations: "
             << FinalOutputFilename << " Error: " << error.message();
         } else {
-          for ( SmallVector< std::string, 32 >::iterator it = TempOutputFiles.begin(), 
+          for ( SmallVector< std::string, 32 >::iterator it = TempOutputFiles.begin(),
                 it_end = TempOutputFiles.end(); it != it_end; ++it) {
             llvm::ErrorOr< std::unique_ptr<llvm::MemoryBuffer> >
               file_epbuf = llvm::MemoryBuffer::getFile(llvm::Twine(*it));
             if(file_epbuf && file_epbuf.get()) {
-              TraceOS << StringRef(file_epbuf.get()->getBufferStart(), 
-                file_epbuf.get()->getBufferEnd() - file_epbuf.get()->getBufferStart()) 
+              TraceOS << StringRef(file_epbuf.get()->getBufferStart(),
+                file_epbuf.get()->getBufferEnd() - file_epbuf.get()->getBufferStart())
                 << '\n';
             }
           }
         }
       }
     }
-    
+
     // Remove temp files.
     C->CleanupFileList(C->getTempFiles());
 
@@ -723,15 +723,15 @@ int main(int argc_, const char **argv_) {
             << FailingTool.getShortName() << FailRes;
       }
     }
-    
+
   }
-  
+
 cleanup:
-  
+
   // If any timers were active but haven't been destroyed yet, print their
   // results now.  This happens in -disable-free mode.
   llvm::TimerGroup::printAll(llvm::errs());
-  
+
   llvm::llvm_shutdown();
 
 #ifdef LLVM_ON_WIN32

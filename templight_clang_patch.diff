@@ -1,8 +1,8 @@
 Index: include/clang/Driver/CC1Options.td
 ===================================================================
---- include/clang/Driver/CC1Options.td	(revision 263875)
+--- include/clang/Driver/CC1Options.td	(revision 269673)
 +++ include/clang/Driver/CC1Options.td	(working copy)
-@@ -426,6 +426,8 @@
+@@ -444,6 +444,8 @@
    HelpText<"Build ASTs and print the list of declaration node qualified names">;
  def ast_dump : Flag<["-"], "ast-dump">,
    HelpText<"Build ASTs and then debug dump them">;
@@ -13,9 +13,9 @@ Index: include/clang/Driver/CC1Options.td
  def ast_view : Flag<["-"], "ast-view">,
 Index: include/clang/Frontend/FrontendActions.h
 ===================================================================
---- include/clang/Frontend/FrontendActions.h	(revision 263875)
+--- include/clang/Frontend/FrontendActions.h	(revision 269673)
 +++ include/clang/Frontend/FrontendActions.h	(working copy)
-@@ -158,6 +158,14 @@
+@@ -159,6 +159,14 @@
    bool hasCodeCompletionSupport() const override { return false; }
  };
  
@@ -32,9 +32,9 @@ Index: include/clang/Frontend/FrontendActions.h
   *
 Index: include/clang/Frontend/FrontendOptions.h
 ===================================================================
---- include/clang/Frontend/FrontendOptions.h	(revision 263875)
+--- include/clang/Frontend/FrontendOptions.h	(revision 269673)
 +++ include/clang/Frontend/FrontendOptions.h	(working copy)
-@@ -54,6 +54,7 @@
+@@ -55,6 +55,7 @@
      RewriteObjC,            ///< ObjC->C Rewriter.
      RewriteTest,            ///< Rewriter playground
      RunAnalysis,            ///< Run one or more source code analyses.
@@ -44,15 +44,20 @@ Index: include/clang/Frontend/FrontendOptions.h
    };
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 263875)
+--- include/clang/FrontendTool/Utils.h	(revision 269673)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
-@@ -18,7 +18,10 @@
+@@ -15,10 +15,15 @@
+ #ifndef LLVM_CLANG_FRONTENDTOOL_UTILS_H
+ #define LLVM_CLANG_FRONTENDTOOL_UTILS_H
+ 
++#include <memory>
++
  namespace clang {
  
  class CompilerInstance;
 +class FrontendAction;
  
-+FrontendAction *CreateFrontendAction(CompilerInstance &CI);
++std::unique_ptr<FrontendAction> CreateFrontendAction(CompilerInstance &CI);
 +
  /// ExecuteCompilerInvocation - Execute the given actions described by the
  /// compiler invocation object in the given compiler instance.
@@ -195,9 +200,9 @@ Index: include/clang/Sema/ActiveTemplateInst.h
 +#endif
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 263875)
+--- include/clang/Sema/Sema.h	(revision 269673)
 +++ include/clang/Sema/Sema.h	(working copy)
-@@ -31,6 +31,7 @@
+@@ -33,6 +33,7 @@
  #include "clang/Basic/Specifiers.h"
  #include "clang/Basic/TemplateKinds.h"
  #include "clang/Basic/TypeTraits.h"
@@ -205,7 +210,7 @@ Index: include/clang/Sema/Sema.h
  #include "clang/Sema/AnalysisBasedWarnings.h"
  #include "clang/Sema/DeclSpec.h"
  #include "clang/Sema/ExternalSemaSource.h"
-@@ -162,6 +163,7 @@
+@@ -164,6 +165,7 @@
    class TemplateArgumentList;
    class TemplateArgumentLoc;
    class TemplateDecl;
@@ -213,7 +218,7 @@ Index: include/clang/Sema/Sema.h
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -6477,120 +6479,6 @@
+@@ -6574,120 +6576,6 @@
                                 bool RelativeToPrimary = false,
                                 const FunctionDecl *Pattern = nullptr);
  
@@ -334,7 +339,7 @@ Index: include/clang/Sema/Sema.h
    /// \brief List of active template instantiations.
    ///
    /// This vector is treated as a stack. As one template instantiation
-@@ -6635,6 +6523,13 @@
+@@ -6736,6 +6624,13 @@
    /// to implement it anywhere else.
    ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
  
@@ -451,9 +456,9 @@ Index: include/clang/Sema/TemplateInstCallbacks.h
 +#endif
 Index: lib/Frontend/CompilerInvocation.cpp
 ===================================================================
---- lib/Frontend/CompilerInvocation.cpp	(revision 263875)
+--- lib/Frontend/CompilerInvocation.cpp	(revision 269673)
 +++ lib/Frontend/CompilerInvocation.cpp	(working copy)
-@@ -980,6 +980,8 @@
+@@ -1064,6 +1064,8 @@
        Opts.ProgramAction = frontend::PrintPreamble; break;
      case OPT_E:
        Opts.ProgramAction = frontend::PrintPreprocessedInput; break;
@@ -462,7 +467,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
      case OPT_rewrite_macros:
        Opts.ProgramAction = frontend::RewriteMacros; break;
      case OPT_rewrite_objc:
-@@ -1997,6 +1999,7 @@
+@@ -2101,6 +2103,7 @@
    case frontend::RewriteObjC:
    case frontend::RewriteTest:
    case frontend::RunAnalysis:
@@ -472,7 +477,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
      break;
 Index: lib/Frontend/FrontendActions.cpp
 ===================================================================
---- lib/Frontend/FrontendActions.cpp	(revision 263875)
+--- lib/Frontend/FrontendActions.cpp	(revision 269673)
 +++ lib/Frontend/FrontendActions.cpp	(working copy)
 @@ -20,14 +20,19 @@
  #include "clang/Lex/Pragma.h"
@@ -494,7 +499,7 @@ Index: lib/Frontend/FrontendActions.cpp
  using namespace clang;
  
  //===----------------------------------------------------------------------===//
-@@ -445,6 +450,143 @@
+@@ -442,6 +447,143 @@
  }
  
  namespace {
@@ -640,7 +645,7 @@ Index: lib/Frontend/FrontendActions.cpp
    class DumpModuleInfoListener : public ASTReaderListener {
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 263875)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 269673)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -31,6 +31,8 @@
  using namespace clang;
@@ -648,27 +653,27 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
  
 +namespace clang {
 +
- static FrontendAction *CreateFrontendBaseAction(CompilerInstance &CI) {
+ static std::unique_ptr<FrontendAction>
+ CreateFrontendBaseAction(CompilerInstance &CI) {
    using namespace clang::frontend;
-   StringRef Action("unknown");
-@@ -58,6 +60,7 @@
-   case ParseSyntaxOnly:        return new SyntaxOnlyAction();
-   case ModuleFileInfo:         return new DumpModuleInfoAction();
-   case VerifyPCH:              return new VerifyPCHAction();
-+  case TemplightDump:          return new TemplightDumpAction();
+@@ -59,6 +61,7 @@
+   case ParseSyntaxOnly:        return llvm::make_unique<SyntaxOnlyAction>();
+   case ModuleFileInfo:         return llvm::make_unique<DumpModuleInfoAction>();
+   case VerifyPCH:              return llvm::make_unique<VerifyPCHAction>();
++  case TemplightDump:          return llvm::make_unique<TemplightDumpAction>();
  
    case PluginAction: {
      for (FrontendPluginRegistry::iterator it =
-@@ -113,7 +116,7 @@
+@@ -117,7 +120,7 @@
  #endif
  }
  
--static FrontendAction *CreateFrontendAction(CompilerInstance &CI) {
-+FrontendAction *CreateFrontendAction(CompilerInstance &CI) {
+-static std::unique_ptr<FrontendAction>
++std::unique_ptr<FrontendAction>
+ CreateFrontendAction(CompilerInstance &CI) {
    // Create the underlying action.
-   FrontendAction *Act = CreateFrontendBaseAction(CI);
-   if (!Act)
-@@ -161,7 +164,7 @@
+   std::unique_ptr<FrontendAction> Act = CreateFrontendBaseAction(CI);
+@@ -168,7 +171,7 @@
    return Act;
  }
  
@@ -677,7 +682,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
    // Honor -help.
    if (Clang->getFrontendOpts().ShowHelp) {
      std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
-@@ -224,3 +227,5 @@
+@@ -243,3 +246,5 @@
      BuryPointer(std::move(Act));
    return Success;
  }
@@ -685,17 +690,17 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 263875)
+--- lib/Parse/ParseAST.cpp	(revision 269673)
 +++ lib/Parse/ParseAST.cpp	(working copy)
-@@ -22,6 +22,7 @@
- #include "clang/Sema/ExternalSemaSource.h"
+@@ -21,6 +21,7 @@
+ #include "clang/Sema/CodeCompleteConsumer.h"
  #include "clang/Sema/Sema.h"
  #include "clang/Sema/SemaConsumer.h"
 +#include "clang/Sema/TemplateInstCallbacks.h"
  #include "llvm/Support/CrashRecoveryContext.h"
  #include <cstdio>
  #include <memory>
-@@ -122,6 +123,11 @@
+@@ -121,6 +122,11 @@
    bool OldCollectStats = PrintStats;
    std::swap(OldCollectStats, S.CollectStats);
  
@@ -707,7 +712,7 @@ Index: lib/Parse/ParseAST.cpp
    ASTConsumer *Consumer = &S.getASTConsumer();
  
    std::unique_ptr<Parser> ParseOP(
-@@ -167,6 +173,14 @@
+@@ -166,6 +172,14 @@
    
    Consumer->HandleTranslationUnit(S.getASTContext());
  
@@ -803,7 +808,7 @@ Index: lib/Sema/ActiveTemplateInst.cpp
 +
 Index: lib/Sema/CMakeLists.txt
 ===================================================================
---- lib/Sema/CMakeLists.txt	(revision 263875)
+--- lib/Sema/CMakeLists.txt	(revision 269673)
 +++ lib/Sema/CMakeLists.txt	(working copy)
 @@ -3,6 +3,7 @@
    )
@@ -815,7 +820,7 @@ Index: lib/Sema/CMakeLists.txt
    CodeCompleteConsumer.cpp
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 263875)
+--- lib/Sema/Sema.cpp	(revision 269673)
 +++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/ScopeInfo.h"
@@ -827,7 +832,7 @@ Index: lib/Sema/Sema.cpp
  #include "llvm/ADT/SmallSet.h"
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 263875)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 269673)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
@@ -904,7 +909,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
  
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 263875)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 269673)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -22,6 +22,7 @@
  #include "clang/Sema/Lookup.h"
@@ -914,7 +919,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
  using namespace clang;
  
-@@ -3247,7 +3248,7 @@
+@@ -3430,7 +3431,7 @@
    // into a template instantiation for this specific function template
    // specialization, which is not a SFINAE context, so that we diagnose any
    // further errors in the declaration itself.
@@ -923,7 +928,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
    ActiveInstType &ActiveInst = SemaRef.ActiveTemplateInstantiations.back();
    if (ActiveInst.Kind == ActiveInstType::ExplicitTemplateArgumentSubstitution ||
        ActiveInst.Kind == ActiveInstType::DeducedTemplateArgumentSubstitution) {
-@@ -3256,8 +3257,12 @@
+@@ -3439,8 +3440,12 @@
        assert(FunTmpl->getTemplatedDecl() == Tmpl &&
               "Deduction from the wrong function template?");
        (void) FunTmpl;
@@ -938,18 +943,18 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 263875)
+--- lib/Sema/SemaType.cpp	(revision 269673)
 +++ lib/Sema/SemaType.cpp	(working copy)
-@@ -31,6 +31,7 @@
- #include "clang/Sema/Lookup.h"
+@@ -30,6 +30,7 @@
  #include "clang/Sema/ScopeInfo.h"
+ #include "clang/Sema/SemaInternal.h"
  #include "clang/Sema/Template.h"
 +#include "clang/Sema/TemplateInstCallbacks.h"
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
- #include "llvm/Support/ErrorHandling.h"
-@@ -6655,6 +6656,14 @@
-         diagnoseMissingImport(Loc, SuggestedDef, /*NeedDefinition*/true,
+ #include "llvm/ADT/StringSwitch.h"
+@@ -6922,6 +6923,14 @@
+         diagnoseMissingImport(Loc, SuggestedDef, MissingImportKind::Definition,
                                /*Recover*/TreatAsComplete);
        return !TreatAsComplete;
 +    } else if (Def && TemplateInstCallbacksChain) {
