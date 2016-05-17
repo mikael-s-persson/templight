@@ -37,13 +37,13 @@ bool TemplightAction::BeginSourceFileAction(CompilerInstance &CI,
 
 std::string TemplightAction::CreateOutputFilename(
     CompilerInstance *CI,
-    const std::string& OptOutputName, 
+    const std::string& OptOutputName,
     bool OptInstProfiler, bool OptOutputToStdOut, bool OptMemoryProfile) {
   std::string result;
-  
+
   if ( !OptInstProfiler )
     return result; // no need for an output-filename.
-  
+
   if ( OptOutputToStdOut ) {
     return "-";
   } else if ( CI && OptOutputName.empty() ) {
@@ -51,8 +51,8 @@ std::string TemplightAction::CreateOutputFilename(
   } else {
     result = OptOutputName;
   }
-  
-  // Should never get executed. 
+
+  // Should never get executed.
   if ( CI && result.empty() ) {
     // then, derive output name from the input name:
     if ( CI->hasSourceManager() ) {
@@ -62,12 +62,12 @@ std::string TemplightAction::CreateOutputFilename(
       result = "a";
     }
   }
-  
+
   if( result.rfind(".trace.") == std::string::npos ) {
     result += (OptMemoryProfile ? ".memory.trace." : ".trace.");
     result += "pbf";
   }
-  
+
   return result;
 }
 
@@ -80,23 +80,23 @@ void TemplightAction::EnsureHasSema(CompilerInstance& CI) {
     if (hasCodeCompletionSupport() &&
         !CI.getFrontendOpts().CodeCompletionAt.FileName.empty())
       CI.createCodeCompletionConsumer();
-    
+
     // Use a code completion consumer?
     CodeCompleteConsumer *CompletionConsumer = nullptr;
     if (CI.hasCodeCompletionConsumer())
       CompletionConsumer = &CI.getCodeCompletionConsumer();
-    
+
     CI.createSema(getTranslationUnitKind(), CompletionConsumer);
     //<<--------------------------------------------------------------
   }
 }
 
 void TemplightAction::ExecuteAction() {
-  
+
   CompilerInstance &CI = WrapperFrontendAction::getCompilerInstance();
   if (!CI.hasPreprocessor())
     return;
-  
+
   if ( InstProfiler ) {
     EnsureHasSema(CI);
 
@@ -109,13 +109,13 @@ void TemplightAction::ExecuteAction() {
   if ( InteractiveDebug ) {
     EnsureHasSema(CI);
 
-    TemplightDebugger* p_t = new TemplightDebugger(CI.getSema(), 
+    TemplightDebugger* p_t = new TemplightDebugger(CI.getSema(),
       MemoryProfile, IgnoreSystemInst);
     p_t->readBlacklists(BlackListFilename);
     TemplateInstantiationCallbacks::appendNewCallbacks(
       CI.getSema().TemplateInstCallbacksChain, p_t);
   }
-  
+
   WrapperFrontendAction::ExecuteAction();
 }
 void TemplightAction::EndSourceFileAction() {
@@ -141,10 +141,9 @@ bool TemplightAction::hasCodeCompletionSupport() const {
   return WrapperFrontendAction::hasCodeCompletionSupport();
 }
 
-TemplightAction::TemplightAction(FrontendAction *WrappedAction) : 
-  WrapperFrontendAction(WrappedAction) { 
-  
-}
+TemplightAction::TemplightAction(std::unique_ptr<FrontendAction> WrappedAction) :
+    WrapperFrontendAction(std::move(WrappedAction)) {
 
 }
 
+}
