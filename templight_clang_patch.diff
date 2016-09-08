@@ -236,10 +236,10 @@ index 668399bf..1c2c6b3 100644
 -      TemplateInstantiation,
 -
 -      /// We are instantiating a default argument for a template
--      /// parameter. The Entity is the template, and
--      /// TemplateArgs/NumTemplateArguments provides the template
--      /// arguments as specified.
--      /// FIXME: Use a TemplateArgumentList
+-      /// parameter. The Entity is the template parameter whose argument is
+-      /// being instantiated, the Template is the template, and the
+-      /// TemplateArgs/NumTemplateArguments provide the template arguments as
+-      /// specified.
 -      DefaultTemplateArgumentInstantiation,
 -
 -      /// We are instantiating a default argument for a function.
