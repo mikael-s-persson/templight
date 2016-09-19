@@ -204,10 +204,10 @@ index 0000000..bfc8520
 +
 +#endif
 diff --git include/clang/Sema/Sema.h include/clang/Sema/Sema.h
-index 668399bf..1c2c6b3 100644
+index 9c2030b..4ef99e5 100644
 --- include/clang/Sema/Sema.h
 +++ include/clang/Sema/Sema.h
-@@ -34,6 +34,7 @@
+@@ -35,6 +35,7 @@
  #include "clang/Basic/Specifiers.h"
  #include "clang/Basic/TemplateKinds.h"
  #include "clang/Basic/TypeTraits.h"
@@ -215,7 +215,7 @@ index 668399bf..1c2c6b3 100644
  #include "clang/Sema/AnalysisBasedWarnings.h"
  #include "clang/Sema/CleanupInfo.h"
  #include "clang/Sema/DeclSpec.h"
-@@ -167,6 +168,7 @@ namespace clang {
+@@ -168,6 +169,7 @@ namespace clang {
    class TemplateArgumentList;
    class TemplateArgumentLoc;
    class TemplateDecl;
@@ -223,7 +223,7 @@ index 668399bf..1c2c6b3 100644
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -6659,124 +6661,6 @@ public:
+@@ -6668,124 +6670,6 @@ public:
                                 bool RelativeToPrimary = false,
                                 const FunctionDecl *Pattern = nullptr);
  
@@ -236,10 +236,10 @@ index 668399bf..1c2c6b3 100644
 -      TemplateInstantiation,
 -
 -      /// We are instantiating a default argument for a template
--      /// parameter. The Entity is the template, and
--      /// TemplateArgs/NumTemplateArguments provides the template
--      /// arguments as specified.
--      /// FIXME: Use a TemplateArgumentList
+-      /// parameter. The Entity is the template parameter whose argument is
+-      /// being instantiated, the Template is the template, and the
+-      /// TemplateArgs/NumTemplateArguments provide the template arguments as
+-      /// specified.
 -      DefaultTemplateArgumentInstantiation,
 -
 -      /// We are instantiating a default argument for a function.
@@ -348,7 +348,7 @@ index 668399bf..1c2c6b3 100644
    /// \brief List of active template instantiations.
    ///
    /// This vector is treated as a stack. As one template instantiation
-@@ -6825,6 +6709,13 @@ public:
+@@ -6837,6 +6721,13 @@ public:
    /// to implement it anywhere else.
    ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
  
