@@ -139,8 +139,9 @@ void TemplightYamlWriter::finalize() {
 void TemplightYamlWriter::printEntry(const PrintableTemplightEntryBegin& Entry) {
   void *SaveInfo;
   if ( Output->preflightElement(1, SaveInfo) ) {
+    llvm::yaml::EmptyContext Context;
     llvm::yaml::yamlize(*Output, const_cast<PrintableTemplightEntryBegin&>(Entry), 
-                        true);
+                        true, Context);
     Output->postflightElement(SaveInfo);
   }
 }
@@ -148,8 +149,9 @@ void TemplightYamlWriter::printEntry(const PrintableTemplightEntryBegin& Entry) 
 void TemplightYamlWriter::printEntry(const PrintableTemplightEntryEnd& Entry) {
   void *SaveInfo;
   if ( Output->preflightElement(1, SaveInfo) ) {
+    llvm::yaml::EmptyContext Context;
     llvm::yaml::yamlize(*Output, const_cast<PrintableTemplightEntryEnd&>(Entry), 
-                        true);
+                        true, Context);
     Output->postflightElement(SaveInfo);
   }
 }

@@ -1,8 +1,8 @@
 diff --git include/clang/Driver/CC1Options.td include/clang/Driver/CC1Options.td
-index 9eaf0c0..1b6ed88 100644
+index 5ebe083..5a3ccc9 100644
 --- include/clang/Driver/CC1Options.td
 +++ include/clang/Driver/CC1Options.td
-@@ -451,6 +451,8 @@ def ast_list : Flag<["-"], "ast-list">,
+@@ -463,6 +463,8 @@ def ast_list : Flag<["-"], "ast-list">,
    HelpText<"Build ASTs and print the list of declaration node qualified names">;
  def ast_dump : Flag<["-"], "ast-dump">,
    HelpText<"Build ASTs and then debug dump them">;
@@ -31,7 +31,7 @@ index a073ca5..86886dd 100644
   * \brief Frontend action adaptor that merges ASTs together.
   *
 diff --git include/clang/Frontend/FrontendOptions.h include/clang/Frontend/FrontendOptions.h
-index 4df5e2b..c4ac82f 100644
+index aad3975..87d3183 100644
 --- include/clang/Frontend/FrontendOptions.h
 +++ include/clang/Frontend/FrontendOptions.h
 @@ -57,6 +57,7 @@ namespace frontend {
@@ -63,7 +63,7 @@ index 031ee7d..766bcd3 100644
  /// compiler invocation object in the given compiler instance.
 diff --git include/clang/Sema/ActiveTemplateInst.h include/clang/Sema/ActiveTemplateInst.h
 new file mode 100644
-index 0000000..bfc8520
+index 0000000..95f132c
 --- /dev/null
 +++ include/clang/Sema/ActiveTemplateInst.h
 @@ -0,0 +1,136 @@
@@ -182,8 +182,8 @@ index 0000000..bfc8520
 +  SourceRange InstantiationRange;
 +
 +  ActiveTemplateInstantiation()
-+    : Kind(TemplateInstantiation), Template(0), Entity(0), TemplateArgs(0),
-+      NumTemplateArgs(0), DeductionInfo(0) {}
++    : Kind(TemplateInstantiation), Template(nullptr), Entity(nullptr),
++      TemplateArgs(nullptr), NumTemplateArgs(0), DeductionInfo(nullptr) {}
 +
 +  /// \brief Determines whether this template is an actual instantiation
 +  /// that should be counted toward the maximum instantiation depth.
@@ -204,10 +204,10 @@ index 0000000..bfc8520
 +
 +#endif
 diff --git include/clang/Sema/Sema.h include/clang/Sema/Sema.h
-index 668399bf..1c2c6b3 100644
+index 2028d2c..8224524 100644
 --- include/clang/Sema/Sema.h
 +++ include/clang/Sema/Sema.h
-@@ -34,6 +34,7 @@
+@@ -35,6 +35,7 @@
  #include "clang/Basic/Specifiers.h"
  #include "clang/Basic/TemplateKinds.h"
  #include "clang/Basic/TypeTraits.h"
@@ -215,7 +215,7 @@ index 668399bf..1c2c6b3 100644
  #include "clang/Sema/AnalysisBasedWarnings.h"
  #include "clang/Sema/CleanupInfo.h"
  #include "clang/Sema/DeclSpec.h"
-@@ -167,6 +168,7 @@ namespace clang {
+@@ -168,6 +169,7 @@ namespace clang {
    class TemplateArgumentList;
    class TemplateArgumentLoc;
    class TemplateDecl;
@@ -223,7 +223,7 @@ index 668399bf..1c2c6b3 100644
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -6659,124 +6661,6 @@ public:
+@@ -6719,124 +6721,6 @@ public:
                                 bool RelativeToPrimary = false,
                                 const FunctionDecl *Pattern = nullptr);
  
@@ -236,10 +236,10 @@ index 668399bf..1c2c6b3 100644
 -      TemplateInstantiation,
 -
 -      /// We are instantiating a default argument for a template
--      /// parameter. The Entity is the template, and
--      /// TemplateArgs/NumTemplateArguments provides the template
--      /// arguments as specified.
--      /// FIXME: Use a TemplateArgumentList
+-      /// parameter. The Entity is the template parameter whose argument is
+-      /// being instantiated, the Template is the template, and the
+-      /// TemplateArgs/NumTemplateArguments provide the template arguments as
+-      /// specified.
 -      DefaultTemplateArgumentInstantiation,
 -
 -      /// We are instantiating a default argument for a function.
@@ -348,7 +348,7 @@ index 668399bf..1c2c6b3 100644
    /// \brief List of active template instantiations.
    ///
    /// This vector is treated as a stack. As one template instantiation
-@@ -6825,6 +6709,13 @@ public:
+@@ -6888,6 +6772,13 @@ public:
    /// to implement it anywhere else.
    ActiveTemplateInstantiation LastTemplateInstantiationErrorContext;
  
@@ -465,10 +465,10 @@ index 0000000..b111428
 +
 +#endif
 diff --git lib/Frontend/CompilerInvocation.cpp lib/Frontend/CompilerInvocation.cpp
-index cb69171..d99ff47 100644
+index e243cf2..3368a04 100644
 --- lib/Frontend/CompilerInvocation.cpp
 +++ lib/Frontend/CompilerInvocation.cpp
-@@ -1137,6 +1137,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+@@ -1167,6 +1167,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
        Opts.ProgramAction = frontend::PrintPreamble; break;
      case OPT_E:
        Opts.ProgramAction = frontend::PrintPreprocessedInput; break;
@@ -477,7 +477,7 @@ index cb69171..d99ff47 100644
      case OPT_rewrite_macros:
        Opts.ProgramAction = frontend::RewriteMacros; break;
      case OPT_rewrite_objc:
-@@ -2273,6 +2275,7 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
+@@ -2328,6 +2330,7 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
    case frontend::RewriteObjC:
    case frontend::RewriteTest:
    case frontend::RunAnalysis:
@@ -486,7 +486,7 @@ index cb69171..d99ff47 100644
      Opts.ShowCPP = 0;
      break;
 diff --git lib/Frontend/FrontendActions.cpp lib/Frontend/FrontendActions.cpp
-index eb91940..61ddab6 100644
+index eb91940..28da847 100644
 --- lib/Frontend/FrontendActions.cpp
 +++ lib/Frontend/FrontendActions.cpp
 @@ -18,12 +18,16 @@
@@ -506,7 +506,7 @@ index eb91940..61ddab6 100644
  #include <memory>
  #include <system_error>
  
-@@ -469,6 +473,143 @@ void VerifyPCHAction::ExecuteAction() {
+@@ -469,6 +473,144 @@ void VerifyPCHAction::ExecuteAction() {
  }
  
  namespace {
@@ -584,7 +584,8 @@ index eb91940..61ddab6 100644
 +        llvm::yaml::Output YO(OS);
 +        TemplightEntry Entry =
 +          GetTemplightEntry<BeginInstantiation>(TheSema, Inst);
-+        llvm::yaml::yamlize(YO, Entry, true);
++        llvm::yaml::EmptyContext Context;
++        llvm::yaml::yamlize(YO, Entry, true, Context);
 +      }
 +      Out << "---" << YAML << "\n";
 +    }
@@ -827,7 +828,7 @@ index 7a59732..b54f602 100644
    AttributeList.cpp
    CodeCompleteConsumer.cpp
 diff --git lib/Sema/Sema.cpp lib/Sema/Sema.cpp
-index 081d45b..58a7a12 100644
+index fc76a86..934dcc4 100644
 --- lib/Sema/Sema.cpp
 +++ lib/Sema/Sema.cpp
 @@ -37,6 +37,7 @@
@@ -839,7 +840,7 @@ index 081d45b..58a7a12 100644
  #include "llvm/ADT/SmallSet.h"
  using namespace clang;
 diff --git lib/Sema/SemaTemplateInstantiate.cpp lib/Sema/SemaTemplateInstantiate.cpp
-index 4749962..a8e772f 100644
+index 321fd69..09d7ce9 100644
 --- lib/Sema/SemaTemplateInstantiate.cpp
 +++ lib/Sema/SemaTemplateInstantiate.cpp
 @@ -25,6 +25,7 @@
@@ -875,8 +876,8 @@ index 4749962..a8e772f 100644
  Sema::InstantiatingTemplate::InstantiatingTemplate(
      Sema &SemaRef, ActiveTemplateInstantiation::InstantiationKind Kind,
      SourceLocation PointOfInstantiation, SourceRange InstantiationRange,
-@@ -228,6 +211,8 @@ Sema::InstantiatingTemplate::InstantiatingTemplate(
-     Inst.InstantiationRange = InstantiationRange;
+@@ -234,6 +217,8 @@ Sema::InstantiatingTemplate::InstantiatingTemplate(
+              .second;
      SemaRef.InNonInstantiationSFINAEContext = false;
      SemaRef.ActiveTemplateInstantiations.push_back(Inst);
 +    if (SemaRef.TemplateInstCallbacksChain)
@@ -884,9 +885,9 @@ index 4749962..a8e772f 100644
      if (!Inst.isInstantiationRecord())
        ++SemaRef.NonInstantiationEntries;
    }
-@@ -346,6 +331,10 @@ void Sema::InstantiatingTemplate::Clear() {
-       SemaRef.ActiveTemplateInstantiationLookupModules.pop_back();
-     }
+@@ -362,6 +347,10 @@ void Sema::InstantiatingTemplate::Clear() {
+       SemaRef.InstantiatingSpecializations.erase(
+           std::make_pair(Active.Entity, Active.Kind));
  
 +    if (SemaRef.TemplateInstCallbacksChain)
 +      SemaRef.TemplateInstCallbacksChain->atTemplateEnd(
@@ -895,7 +896,7 @@ index 4749962..a8e772f 100644
      SemaRef.ActiveTemplateInstantiations.pop_back();
      Invalid = true;
    }
-@@ -557,6 +546,9 @@ void Sema::PrintInstantiationStack() {
+@@ -573,6 +562,9 @@ void Sema::PrintInstantiationStack() {
          << cast<FunctionDecl>(Active->Entity)
          << Active->InstantiationRange;
        break;
@@ -905,7 +906,7 @@ index 4749962..a8e772f 100644
      }
    }
  }
-@@ -597,6 +589,9 @@ Optional<TemplateDeductionInfo *> Sema::isSFINAEContext() const {
+@@ -613,6 +605,9 @@ Optional<TemplateDeductionInfo *> Sema::isSFINAEContext() const {
        // or deduced template arguments, so SFINAE applies.
        assert(Active->DeductionInfo && "Missing deduction info pointer");
        return Active->DeductionInfo;
@@ -916,7 +917,7 @@ index 4749962..a8e772f 100644
    }
  
 diff --git lib/Sema/SemaTemplateInstantiateDecl.cpp lib/Sema/SemaTemplateInstantiateDecl.cpp
-index f7d9787..95cbf2f 100644
+index 6b6abc7..9d46c3e 100644
 --- lib/Sema/SemaTemplateInstantiateDecl.cpp
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp
 @@ -23,6 +23,7 @@
@@ -927,7 +928,7 @@ index f7d9787..95cbf2f 100644
  
  using namespace clang;
  
-@@ -3438,7 +3439,7 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
+@@ -3446,7 +3447,7 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
    // into a template instantiation for this specific function template
    // specialization, which is not a SFINAE context, so that we diagnose any
    // further errors in the declaration itself.
@@ -936,7 +937,7 @@ index f7d9787..95cbf2f 100644
    ActiveInstType &ActiveInst = SemaRef.ActiveTemplateInstantiations.back();
    if (ActiveInst.Kind == ActiveInstType::ExplicitTemplateArgumentSubstitution ||
        ActiveInst.Kind == ActiveInstType::DeducedTemplateArgumentSubstitution) {
-@@ -3447,8 +3448,12 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
+@@ -3455,8 +3456,12 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
        assert(FunTmpl->getTemplatedDecl() == Tmpl &&
               "Deduction from the wrong function template?");
        (void) FunTmpl;
@@ -950,7 +951,7 @@ index f7d9787..95cbf2f 100644
    }
  
 diff --git lib/Sema/SemaType.cpp lib/Sema/SemaType.cpp
-index 8a49f61..1569ec0 100644
+index 9a01040..0b30fe0 100644
 --- lib/Sema/SemaType.cpp
 +++ lib/Sema/SemaType.cpp
 @@ -30,6 +30,7 @@
@@ -961,7 +962,7 @@ index 8a49f61..1569ec0 100644
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
  #include "llvm/ADT/StringSwitch.h"
-@@ -6986,6 +6987,14 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
+@@ -7176,6 +7177,14 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
          diagnoseMissingImport(Loc, SuggestedDef, MissingImportKind::Definition,
                                /*Recover*/TreatAsComplete);
        return !TreatAsComplete;

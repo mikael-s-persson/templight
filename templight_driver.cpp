@@ -60,6 +60,7 @@
 
 #include "TemplightAction.h"
 
+#include <set>
 #include <memory>
 #include <system_error>
 
@@ -477,7 +478,7 @@ void ExecuteTemplightCommand(Driver &TheDriver, DiagnosticsEngine &Diags,
 
 
 int main(int argc_, const char **argv_) {
-  llvm::sys::PrintStackTraceOnErrorSignal();
+  llvm::sys::PrintStackTraceOnErrorSignal(argv_[0]);
   llvm::PrettyStackTraceProgram X(argc_, argv_);
 
   if (llvm::sys::Process::FixupStandardFileDescriptors())
