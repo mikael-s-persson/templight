@@ -230,12 +230,14 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
   Entry.PointOfInstantiation = Inst.PointOfInstantiation;
   
   // NOTE: Use this function because it produces time since start of process.
-  llvm::sys::TimeValue now(0,0), user(0,0), sys(0,0);
+  llvm::sys::TimePoint<> now;
+  std::chrono::nanoseconds user, sys;
   llvm::sys::Process::GetTimeUsage(now, user, sys);
-  if(user.seconds() != 0 || user.nanoseconds() != 0)
-    now = user;
+  if(user != std::chrono::nanoseconds::zero())
+    now = llvm::sys::TimePoint<>(user);
   
-  Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
+  using Seconds = std::chrono::duration<double, std::ratio<1>>;
+  Entry.TimeStamp = Seconds(now.time_since_epoch()).count();
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
   
   Printer->printRawEntry(Entry, SafeModeFlag);
@@ -253,12 +255,14 @@ void TemplightTracer::atTemplateEndImpl(const Sema &TheSema,
   Entry.Entity = Inst.Entity;
   
   // NOTE: Use this function because it produces time since start of process.
-  llvm::sys::TimeValue now(0,0), user(0,0), sys(0,0);
+  llvm::sys::TimePoint<> now;
+  std::chrono::nanoseconds user, sys;
   llvm::sys::Process::GetTimeUsage(now, user, sys);
-  if(user.seconds() != 0 || user.nanoseconds() != 0)
-    now = user;
+  if(user != std::chrono::nanoseconds::zero())
+    now = llvm::sys::TimePoint<>(user);
   
-  Entry.TimeStamp = now.seconds() + now.nanoseconds() / 1000000000.0;
+  using Seconds = std::chrono::duration<double, std::ratio<1>>;
+  Entry.TimeStamp = Seconds(now.time_since_epoch()).count();
   Entry.MemoryUsage = (MemoryFlag ? llvm::sys::Process::GetMallocUsage() : 0);
   
   Printer->printRawEntry(Entry, SafeModeFlag);
