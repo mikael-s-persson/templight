@@ -14,6 +14,7 @@
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Compression.h>
+#include <llvm/Support/Error.h>
 
 #include <string>
 #include <cstdint>
@@ -231,13 +232,15 @@ std::string TemplightProtobufWriter::printTemplateName(const std::string& Name) 
   switch( compressionMode ) {
     case 1: { // zlib-compressed name:
       llvm::SmallVector<char, 32> CompressedBuffer;
-      if ( llvm::zlib::compress(llvm::StringRef(Name), CompressedBuffer) 
-                == llvm::zlib::StatusOK ) {
+      if ( auto E = llvm::zlib::compress(llvm::StringRef(Name), CompressedBuffer) ) {
+        handleAllErrors(std::move(E), [](const llvm::StringError&) {});
+        // fall through to case 0
+      } else {
         // optional bytes compressed_name = 2;
         llvm::protobuf::saveString(OS_inner, 2, 
           llvm::StringRef(CompressedBuffer.begin(), CompressedBuffer.size()));
         break;
-      } // else, go to case 0:
+      }
     }
     case 0:
       // optional string name = 1;
