@@ -59,6 +59,62 @@ PrintableTemplightEntryBegin rawToPrintableBegin(const Sema &TheSema, const RawT
   if (NamedTemplate) {
     llvm::raw_string_ostream OS(Ret.Name);
     NamedTemplate->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+    if (!OS.tell()) {
+      Decl *Ctx = Decl::castFromDeclContext(NamedTemplate->getDeclContext());
+      NamedDecl *NamedCtx = dyn_cast_or_null<NamedDecl>(Ctx);
+      if (NamedCtx) {
+        if (isa<CXXRecordDecl>(NamedTemplate))
+        {
+          CXXRecordDecl *Decl = cast<CXXRecordDecl>(NamedTemplate);
+          if (Decl->isLambda()) {
+            OS << "lambda at ";
+            Decl->getLocation().print(OS, TheSema.getSourceManager());
+          }
+        }
+        else if (isa<ParmVarDecl>(NamedTemplate))
+        {
+          ParmVarDecl *Decl = cast<ParmVarDecl>(NamedTemplate);
+          OS << "function parameter " << Decl->getFunctionScopeIndex() << " ";
+          if (Decl->getFunctionScopeDepth() > 0) OS << "(at depth " << Decl->getFunctionScopeDepth() << ") ";
+          OS << "of ";
+          NamedCtx->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+        }
+        else if (isa<TemplateTypeParmDecl>(NamedTemplate))
+        {
+          TemplateTypeParmDecl *Decl = cast<TemplateTypeParmDecl>(NamedTemplate);
+          const Type *Ty = Decl->getTypeForDecl();
+          if (Ty) {
+            const TemplateTypeParmType *TTPT = dyn_cast_or_null<TemplateTypeParmType>(Ty);
+            if (TTPT) {
+              OS << "template type parameter " << TTPT->getIndex() << " ";
+              if (TTPT->getDepth() > 0) OS << "(at depth " << TTPT->getDepth() << ") ";
+              OS << "of ";
+              NamedCtx->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+            }
+          }
+        }
+        else if (isa<NonTypeTemplateParmDecl>(NamedTemplate))
+        {
+          NonTypeTemplateParmDecl *Decl = cast<NonTypeTemplateParmDecl>(NamedTemplate);
+          OS << "template non-type parameter " << Decl->getIndex() << " ";
+          if (Decl->getDepth() > 0) OS << "(at depth " << Decl->getDepth() << ") ";
+          OS << "of ";
+          NamedCtx->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+        }
+        else if (isa<TemplateTemplateParmDecl>(NamedTemplate))
+        {
+          TemplateTemplateParmDecl *Decl = cast<TemplateTemplateParmDecl>(NamedTemplate);
+          OS << "template template parameter " << Decl->getIndex() << " ";
+          if (Decl->getDepth() > 0) OS << "(at depth " << Decl->getDepth() << ") ";
+          OS << "of ";
+          NamedCtx->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
+        }
+      }
+    }
+  }
+  if (Ret.Name.empty()) {
+    llvm::errs() << "Warning: [Templight] " << Entry.Entity->getDeclKindName() << " with no name at ";
+    llvm::errs() << Entry.Entity->getLocation().printToString(TheSema.getSourceManager()) << "\n";
   }
   
   PresumedLoc Loc = TheSema.getSourceManager().getPresumedLoc(Entry.PointOfInstantiation);
