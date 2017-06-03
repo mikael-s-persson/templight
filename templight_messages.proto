@@ -4,7 +4,7 @@ message TemplightHeader {
 }
 
 message TemplightEntry {
-  enum InstantiationKind {
+  enum SynthesisKind {
     TemplateInstantiation = 0;
     DefaultTemplateArgumentInstantiation = 1;
     DefaultFunctionArgumentInstantiation = 2;
@@ -34,7 +34,7 @@ message TemplightEntry {
   }
   
   message Begin {
-    required InstantiationKind kind = 1;
+    required SynthesisKind kind = 1;
     required TemplateName name = 2;
     required SourceLocation location = 3;
     optional double time_stamp = 4;
