@@ -23,7 +23,7 @@ protected:
   std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
                                                         StringRef InFile) override;
   bool BeginInvocation(CompilerInstance &CI) override;
-  bool BeginSourceFileAction(CompilerInstance &CI, StringRef Filename) override;
+  bool BeginSourceFileAction(CompilerInstance &CI) override;
   void ExecuteAction() override;
   void EndSourceFileAction() override;
 

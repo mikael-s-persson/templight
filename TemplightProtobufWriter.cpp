@@ -14,6 +14,7 @@
 
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Compression.h>
+#include <llvm/Support/Error.h>
 
 #include <string>
 #include <cstdint>
@@ -231,8 +232,7 @@ std::string TemplightProtobufWriter::printTemplateName(const std::string& Name) 
   switch( compressionMode ) {
     case 1: { // zlib-compressed name:
       llvm::SmallVector<char, 32> CompressedBuffer;
-      if ( llvm::zlib::compress(llvm::StringRef(Name), CompressedBuffer) 
-                == llvm::zlib::StatusOK ) {
+      if ( llvm::zlib::compress(llvm::StringRef(Name), CompressedBuffer) ) {
         // optional bytes compressed_name = 2;
         llvm::protobuf::saveString(OS_inner, 2, 
           llvm::StringRef(CompressedBuffer.begin(), CompressedBuffer.size()));
@@ -264,7 +264,7 @@ void TemplightProtobufWriter::printEntry(const PrintableTemplightEntryBegin& aEn
     
     /*
   message Begin {
-    required InstantiationKind kind = 1;
+    required SynthesisKind kind = 1;
     required string name = 2;
     required SourceLocation location = 3;
     optional double time_stamp = 4;
@@ -273,7 +273,7 @@ void TemplightProtobufWriter::printEntry(const PrintableTemplightEntryBegin& aEn
   }
     */
     
-    llvm::protobuf::saveVarInt(OS_inner, 1, aEntry.InstantiationKind);    // kind
+    llvm::protobuf::saveVarInt(OS_inner, 1, aEntry.SynthesisKind);    // kind
     llvm::protobuf::saveString(OS_inner, 2, 
                          printTemplateName(aEntry.Name));                 // name
     llvm::protobuf::saveString(OS_inner, 3, 

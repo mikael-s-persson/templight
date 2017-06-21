@@ -27,8 +27,8 @@ protected:
   
   void initializeImpl(const Sema &TheSema) override;
   void finalizeImpl(const Sema &TheSema) override;
-  void atTemplateBeginImpl(const Sema &TheSema, const ActiveTemplateInstantiation& Inst) override;
-  void atTemplateEndImpl(const Sema &TheSema, const ActiveTemplateInstantiation& Inst) override;
+  void atTemplateBeginImpl(const Sema &TheSema, const Sema::CodeSynthesisContext& Inst) override;
+  void atTemplateEndImpl(const Sema &TheSema, const Sema::CodeSynthesisContext& Inst) override;
   
 private:
   

@@ -18,7 +18,7 @@
 namespace clang {
 
 
-static const char* const InstantiationKindStrings[] = { 
+static const char* const SynthesisKindStrings[] = { 
   "TemplateInstantiation",
   "DefaultTemplateArgumentInstantiation",
   "DefaultFunctionArgumentInstantiation",
@@ -71,23 +71,23 @@ static std::string escapeXml(const std::string& Input) {
 
 template <>
 struct ScalarEnumerationTraits<
-    clang::ActiveTemplateInstantiation::InstantiationKind> {
+    clang::Sema::CodeSynthesisContext::SynthesisKind> {
   static void enumeration(IO &io,
-    clang::ActiveTemplateInstantiation::InstantiationKind &value) {
+    clang::Sema::CodeSynthesisContext::SynthesisKind &value) {
 
 #define def_enum_case(e) \
-  io.enumCase(value, InstantiationKindStrings[e], e)
+  io.enumCase(value, SynthesisKindStrings[e], e)
 
     using namespace clang;
-    def_enum_case(ActiveTemplateInstantiation::TemplateInstantiation);
-    def_enum_case(ActiveTemplateInstantiation::DefaultTemplateArgumentInstantiation);
-    def_enum_case(ActiveTemplateInstantiation::DefaultFunctionArgumentInstantiation);
-    def_enum_case(ActiveTemplateInstantiation::ExplicitTemplateArgumentSubstitution);
-    def_enum_case(ActiveTemplateInstantiation::DeducedTemplateArgumentSubstitution);
-    def_enum_case(ActiveTemplateInstantiation::PriorTemplateArgumentSubstitution);
-    def_enum_case(ActiveTemplateInstantiation::DefaultTemplateArgumentChecking);
-    def_enum_case(ActiveTemplateInstantiation::ExceptionSpecInstantiation);
-    def_enum_case(ActiveTemplateInstantiation::Memoization);
+    def_enum_case(CodeSynthesisContext::TemplateInstantiation);
+    def_enum_case(CodeSynthesisContext::DefaultTemplateArgumentInstantiation);
+    def_enum_case(CodeSynthesisContext::DefaultFunctionArgumentInstantiation);
+    def_enum_case(CodeSynthesisContext::ExplicitTemplateArgumentSubstitution);
+    def_enum_case(CodeSynthesisContext::DeducedTemplateArgumentSubstitution);
+    def_enum_case(CodeSynthesisContext::PriorTemplateArgumentSubstitution);
+    def_enum_case(CodeSynthesisContext::DefaultTemplateArgumentChecking);
+    def_enum_case(CodeSynthesisContext::ExceptionSpecInstantiation);
+    def_enum_case(CodeSynthesisContext::Memoization);
 
 #undef def_enum_case
   }
@@ -99,7 +99,7 @@ struct MappingTraits<clang::PrintableTemplightEntryBegin> {
     bool b = true;
     io.mapRequired("IsBegin", b);
     // must be converted to string before, due to some BS with yaml traits.
-    std::string kind = clang::InstantiationKindStrings[Entry.InstantiationKind];
+    std::string kind = clang::SynthesisKindStrings[Entry.SynthesisKind];
     io.mapRequired("Kind", kind);
     io.mapOptional("Name", Entry.Name);
     std::string loc = Entry.FileName + "|" + 
@@ -191,7 +191,7 @@ void TemplightXmlWriter::printEntry(const PrintableTemplightEntryBegin& aEntry) 
     "    <Kind>%s</Kind>\n"
     "    <Context context = \"%s\"/>\n"
     "    <Location>%s|%d|%d</Location>\n",
-    InstantiationKindStrings[aEntry.InstantiationKind], EscapedName.c_str(),
+    SynthesisKindStrings[aEntry.SynthesisKind], EscapedName.c_str(),
     aEntry.FileName.c_str(), aEntry.Line, aEntry.Column);
   OutputOS << llvm::format(
     "    <TimeStamp time = \"%.9f\"/>\n"
@@ -232,7 +232,7 @@ void TemplightTextWriter::printEntry(const PrintableTemplightEntryBegin& aEntry)
     "  Kind = %s\n"
     "  Name = %s\n"
     "  Location = %s|%d|%d\n",
-    InstantiationKindStrings[aEntry.InstantiationKind], aEntry.Name.c_str(),
+    SynthesisKindStrings[aEntry.SynthesisKind], aEntry.Name.c_str(),
     aEntry.FileName.c_str(), aEntry.Line, aEntry.Column);
   OutputOS << llvm::format(
     "  TimeStamp = %.9f\n"
@@ -356,7 +356,7 @@ void TemplightNestedXMLWriter::openPrintedTreeNode(const EntryTraversalTask& aNo
   
   OutputOS << llvm::format(
     "<Entry Kind=\"%s\" Name=\"%s\" ",
-    InstantiationKindStrings[BegEntry.InstantiationKind], EscapedName.c_str());
+    SynthesisKindStrings[BegEntry.SynthesisKind], EscapedName.c_str());
   OutputOS << llvm::format(
     "Location=\"%s|%d|%d\" ", 
     BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
@@ -424,7 +424,7 @@ void TemplightGraphMLWriter::openPrintedTreeNode(const EntryTraversalTask& aNode
     "  <data key=\"d0\">%s</data>\n"
     "  <data key=\"d1\">\"%s\"</data>\n"
     "  <data key=\"d2\">\"%s|%d|%d\"</data>\n",
-    InstantiationKindStrings[BegEntry.InstantiationKind], EscapedName.c_str(),
+    SynthesisKindStrings[BegEntry.SynthesisKind], EscapedName.c_str(),
     BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
   OutputOS << llvm::format(
     "  <data key=\"d3\">%.9f</data>\n"
@@ -475,7 +475,7 @@ void TemplightGraphVizWriter::openPrintedTreeNode(const EntryTraversalTask& aNod
         "\"%s\\n"
         "%s\\n"
         "At %s Line %d Column %d\\n",
-      InstantiationKindStrings[BegEntry.InstantiationKind], EscapedName.c_str(),
+      SynthesisKindStrings[BegEntry.SynthesisKind], EscapedName.c_str(),
       BegEntry.FileName.c_str(), BegEntry.Line, BegEntry.Column);
   if( !BegEntry.TempOri_FileName.empty() ) {
     OutputOS << llvm::format(

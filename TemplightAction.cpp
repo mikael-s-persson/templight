@@ -30,9 +30,8 @@ std::unique_ptr<clang::ASTConsumer> TemplightAction::CreateASTConsumer(
 bool TemplightAction::BeginInvocation(CompilerInstance &CI) {
   return WrapperFrontendAction::BeginInvocation(CI);
 }
-bool TemplightAction::BeginSourceFileAction(CompilerInstance &CI,
-                                            StringRef Filename) {
-  return WrapperFrontendAction::BeginSourceFileAction(CI, Filename);
+bool TemplightAction::BeginSourceFileAction(CompilerInstance &CI) {
+  return WrapperFrontendAction::BeginSourceFileAction(CI);
 }
 
 std::string TemplightAction::CreateOutputFilename(

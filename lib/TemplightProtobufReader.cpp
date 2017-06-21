@@ -153,7 +153,7 @@ void TemplightProtobufReader::loadTemplateName(llvm::StringRef aSubBuffer) {
 
 void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
   // Set default values:
-  LastBeginEntry.InstantiationKind = 0;
+  LastBeginEntry.SynthesisKind = 0;
   LastBeginEntry.Name = "";
   LastBeginEntry.TimeStamp = 0.0;
   LastBeginEntry.MemoryUsage = 0;
@@ -162,7 +162,7 @@ void TemplightProtobufReader::loadBeginEntry(llvm::StringRef aSubBuffer) {
     unsigned int cur_wire = llvm::protobuf::loadVarInt(aSubBuffer);
     switch( cur_wire ) {
       case llvm::protobuf::getVarIntWire<1>::value:
-        LastBeginEntry.InstantiationKind = llvm::protobuf::loadVarInt(aSubBuffer);
+        LastBeginEntry.SynthesisKind = llvm::protobuf::loadVarInt(aSubBuffer);
         break;
       case llvm::protobuf::getStringWire<2>::value: {
         std::uint64_t cur_size = llvm::protobuf::loadVarInt(aSubBuffer);

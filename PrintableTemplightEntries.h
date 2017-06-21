@@ -20,7 +20,7 @@ namespace llvm {
 namespace clang {
 
 struct PrintableTemplightEntryBegin {
-  int InstantiationKind;
+  int SynthesisKind;
   std::string Name;
   std::string FileName;
   int Line;

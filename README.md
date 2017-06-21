@@ -71,12 +71,7 @@ Templight must be compiled from source, alongside the Clang source code.
 
 **CMake build**
 
-4. Add the templight directory to the `CMakeLists.txt` file. 
-  1. Open the file: `llvm/tools/clang/tools/CMakeLists.txt`
-  2. Add the line: `add_subdirectory(templight)`
-  3. Save and exit the editor.
-
-5. (Re-)Compile LLVM / Clang: (same as the corresponding step in LLVM/Clang instructions)
+4. (Re-)Compile LLVM / Clang: (same as the corresponding step in LLVM/Clang instructions)
 ```bash
   (from top-level folder)
   $ mkdir build
