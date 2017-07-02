@@ -242,7 +242,7 @@ index 9621889b27..896c40cace 100644
  #include <memory>
  #include <system_error>
  
-@@ -246,6 +250,145 @@ void VerifyPCHAction::ExecuteAction() {
+@@ -252,6 +256,149 @@ void VerifyPCHAction::ExecuteAction() {
  }
  
  namespace {
@@ -305,6 +305,10 @@ index 9621889b27..896c40cace 100644
 +        return "DefaultTemplateArgumentChecking";
 +      case CodeSynthesisContext::ExceptionSpecInstantiation:
 +        return "ExceptionSpecInstantiation";
++      case CodeSynthesisContext::DeclaringSpecialMember:
++        return "DeclaringSpecialMember";
++      case CodeSynthesisContext::DefiningSynthesizedFunction:
++        return "DefiningSynthesizedFunction";
 +      case CodeSynthesisContext::Memoization:
 +        return "Memoization";
 +      }
