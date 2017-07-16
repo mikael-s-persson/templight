@@ -1,8 +1,8 @@
-diff --git include/clang/Driver/CC1Options.td include/clang/Driver/CC1Options.td
-index b55289d..834d320 100644
---- include/clang/Driver/CC1Options.td
-+++ include/clang/Driver/CC1Options.td
-@@ -491,6 +491,8 @@ def ast_dump : Flag<["-"], "ast-dump">,
+diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
+index 1132d1345f..dea639f28e 100644
+--- a/include/clang/Driver/CC1Options.td
++++ b/include/clang/Driver/CC1Options.td
+@@ -494,6 +494,8 @@ def ast_dump : Flag<["-"], "ast-dump">,
    HelpText<"Build ASTs and then debug dump them">;
  def ast_dump_all : Flag<["-"], "ast-dump-all">,
    HelpText<"Build ASTs and then debug dump them, forcing deserialization">;
@@ -11,11 +11,11 @@ index b55289d..834d320 100644
  def ast_dump_lookups : Flag<["-"], "ast-dump-lookups">,
    HelpText<"Build ASTs and then debug dump their name lookup tables">;
  def ast_view : Flag<["-"], "ast-view">,
-diff --git include/clang/Frontend/FrontendActions.h include/clang/Frontend/FrontendActions.h
-index cb44985..1c694ef 100644
---- include/clang/Frontend/FrontendActions.h
-+++ include/clang/Frontend/FrontendActions.h
-@@ -162,6 +162,14 @@ public:
+diff --git a/include/clang/Frontend/FrontendActions.h b/include/clang/Frontend/FrontendActions.h
+index 84db293c46..bf8120f663 100644
+--- a/include/clang/Frontend/FrontendActions.h
++++ b/include/clang/Frontend/FrontendActions.h
+@@ -160,6 +160,14 @@ public:
    bool hasCodeCompletionSupport() const override { return false; }
  };
  
@@ -30,10 +30,10 @@ index cb44985..1c694ef 100644
  /**
   * \brief Frontend action adaptor that merges ASTs together.
   *
-diff --git include/clang/Frontend/FrontendOptions.h include/clang/Frontend/FrontendOptions.h
-index 36c0468..6f37a23 100644
---- include/clang/Frontend/FrontendOptions.h
-+++ include/clang/Frontend/FrontendOptions.h
+diff --git a/include/clang/Frontend/FrontendOptions.h b/include/clang/Frontend/FrontendOptions.h
+index e757a7e397..bb84c0c5e4 100644
+--- a/include/clang/Frontend/FrontendOptions.h
++++ b/include/clang/Frontend/FrontendOptions.h
 @@ -58,6 +58,7 @@ namespace frontend {
      RewriteObjC,            ///< ObjC->C Rewriter.
      RewriteTest,            ///< Rewriter playground
@@ -42,10 +42,10 @@ index 36c0468..6f37a23 100644
      MigrateSource,          ///< Run migrator.
      RunPreprocessorOnly     ///< Just lex, no output.
    };
-diff --git include/clang/FrontendTool/Utils.h include/clang/FrontendTool/Utils.h
-index 031ee7d..766bcd3 100644
---- include/clang/FrontendTool/Utils.h
-+++ include/clang/FrontendTool/Utils.h
+diff --git a/include/clang/FrontendTool/Utils.h b/include/clang/FrontendTool/Utils.h
+index 031ee7df70..766bcd3465 100644
+--- a/include/clang/FrontendTool/Utils.h
++++ b/include/clang/FrontendTool/Utils.h
 @@ -15,9 +15,14 @@
  #ifndef LLVM_CLANG_FRONTENDTOOL_UTILS_H
  #define LLVM_CLANG_FRONTENDTOOL_UTILS_H
@@ -61,10 +61,10 @@ index 031ee7d..766bcd3 100644
  
  /// ExecuteCompilerInvocation - Execute the given actions described by the
  /// compiler invocation object in the given compiler instance.
-diff --git include/clang/Sema/Sema.h include/clang/Sema/Sema.h
-index b109ca0..5f48414 100644
---- include/clang/Sema/Sema.h
-+++ include/clang/Sema/Sema.h
+diff --git a/include/clang/Sema/Sema.h b/include/clang/Sema/Sema.h
+index 1dedf4ba24..70fe100cab 100644
+--- a/include/clang/Sema/Sema.h
++++ b/include/clang/Sema/Sema.h
 @@ -172,6 +172,7 @@ namespace clang {
    class TemplateArgumentList;
    class TemplateArgumentLoc;
@@ -73,7 +73,7 @@ index b109ca0..5f48414 100644
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -7027,6 +7028,12 @@ public:
+@@ -7026,6 +7027,12 @@ public:
        /// We are defining a synthesized function (such as a defaulted special
        /// member).
        DefiningSynthesizedFunction,
@@ -86,7 +86,7 @@ index b109ca0..5f48414 100644
      } Kind;
  
      /// \brief Was the enclosing context a non-instantiation SFINAE context?
-@@ -7135,6 +7142,13 @@ public:
+@@ -7134,6 +7141,13 @@ public:
    // FIXME: Does this belong in Sema? It's tough to implement it anywhere else.
    unsigned LastEmittedCodeSynthesisContextDepth = 0;
  
@@ -100,11 +100,11 @@ index b109ca0..5f48414 100644
    /// \brief The current index into pack expansion arguments that will be
    /// used for substitution of parameter packs.
    ///
-diff --git include/clang/Sema/TemplateInstCallbacks.h include/clang/Sema/TemplateInstCallbacks.h
+diff --git a/include/clang/Sema/TemplateInstCallbacks.h b/include/clang/Sema/TemplateInstCallbacks.h
 new file mode 100644
-index 0000000..20c2508
+index 0000000000..20c2508593
 --- /dev/null
-+++ include/clang/Sema/TemplateInstCallbacks.h
++++ b/include/clang/Sema/TemplateInstCallbacks.h
 @@ -0,0 +1,94 @@
 +//===- TemplateInstCallbacks.h - Template Instantiation Callbacks - C++ --===//
 +//
@@ -200,11 +200,11 @@ index 0000000..20c2508
 +}
 +
 +#endif
-diff --git lib/Frontend/CompilerInvocation.cpp lib/Frontend/CompilerInvocation.cpp
-index 1c590ce..0161de6 100644
---- lib/Frontend/CompilerInvocation.cpp
-+++ lib/Frontend/CompilerInvocation.cpp
-@@ -1198,6 +1198,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
+index e6feaf7447..52b80c5de3 100644
+--- a/lib/Frontend/CompilerInvocation.cpp
++++ b/lib/Frontend/CompilerInvocation.cpp
+@@ -1208,6 +1208,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
        Opts.ProgramAction = frontend::PrintPreamble; break;
      case OPT_E:
        Opts.ProgramAction = frontend::PrintPreprocessedInput; break;
@@ -213,18 +213,18 @@ index 1c590ce..0161de6 100644
      case OPT_rewrite_macros:
        Opts.ProgramAction = frontend::RewriteMacros; break;
      case OPT_rewrite_objc:
-@@ -2476,6 +2478,7 @@ static void ParsePreprocessorOutputArgs(PreprocessorOutputOptions &Opts,
+@@ -2405,6 +2407,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
    case frontend::RewriteObjC:
    case frontend::RewriteTest:
    case frontend::RunAnalysis:
 +  case frontend::TemplightDump:
    case frontend::MigrateSource:
-     Opts.ShowCPP = 0;
-     break;
-diff --git lib/Frontend/FrontendActions.cpp lib/Frontend/FrontendActions.cpp
-index 89ac385..cd4be32 100644
---- lib/Frontend/FrontendActions.cpp
-+++ lib/Frontend/FrontendActions.cpp
+     return false;
+ 
+diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
+index 9621889b27..896c40cace 100644
+--- a/lib/Frontend/FrontendActions.cpp
++++ b/lib/Frontend/FrontendActions.cpp
 @@ -18,12 +18,16 @@
  #include "clang/Lex/HeaderSearch.h"
  #include "clang/Lex/Preprocessor.h"
@@ -242,7 +242,7 @@ index 89ac385..cd4be32 100644
  #include <memory>
  #include <system_error>
  
-@@ -252,6 +256,145 @@ void VerifyPCHAction::ExecuteAction() {
+@@ -246,6 +250,145 @@ void VerifyPCHAction::ExecuteAction() {
  }
  
  namespace {
@@ -388,10 +388,10 @@ index 89ac385..cd4be32 100644
    /// \brief AST reader listener that dumps module information for a module
    /// file.
    class DumpModuleInfoListener : public ASTReaderListener {
-diff --git lib/FrontendTool/ExecuteCompilerInvocation.cpp lib/FrontendTool/ExecuteCompilerInvocation.cpp
-index 1f7493c..a3df77e 100644
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp
-+++ lib/FrontendTool/ExecuteCompilerInvocation.cpp
+diff --git a/lib/FrontendTool/ExecuteCompilerInvocation.cpp b/lib/FrontendTool/ExecuteCompilerInvocation.cpp
+index a7c140188b..4a2a444d0a 100644
+--- a/lib/FrontendTool/ExecuteCompilerInvocation.cpp
++++ b/lib/FrontendTool/ExecuteCompilerInvocation.cpp
 @@ -31,6 +31,8 @@
  using namespace clang;
  using namespace llvm::opt;
@@ -409,7 +409,7 @@ index 1f7493c..a3df77e 100644
  
    case PluginAction: {
      for (FrontendPluginRegistry::iterator it =
-@@ -120,7 +123,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
+@@ -121,7 +124,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
  #endif
  }
  
@@ -418,7 +418,7 @@ index 1f7493c..a3df77e 100644
  CreateFrontendAction(CompilerInstance &CI) {
    // Create the underlying action.
    std::unique_ptr<FrontendAction> Act = CreateFrontendBaseAction(CI);
-@@ -171,7 +174,7 @@ CreateFrontendAction(CompilerInstance &CI) {
+@@ -172,7 +175,7 @@ CreateFrontendAction(CompilerInstance &CI) {
    return Act;
  }
  
@@ -427,16 +427,16 @@ index 1f7493c..a3df77e 100644
    // Honor -help.
    if (Clang->getFrontendOpts().ShowHelp) {
      std::unique_ptr<OptTable> Opts = driver::createDriverOptTable();
-@@ -251,3 +254,5 @@ bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
+@@ -252,3 +255,5 @@ bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
      BuryPointer(std::move(Act));
    return Success;
  }
 +
 +}
-diff --git lib/Parse/ParseAST.cpp lib/Parse/ParseAST.cpp
-index d018d4c..2d51570 100644
---- lib/Parse/ParseAST.cpp
-+++ lib/Parse/ParseAST.cpp
+diff --git a/lib/Parse/ParseAST.cpp b/lib/Parse/ParseAST.cpp
+index d018d4c08e..2d51570700 100644
+--- a/lib/Parse/ParseAST.cpp
++++ b/lib/Parse/ParseAST.cpp
 @@ -21,6 +21,7 @@
  #include "clang/Sema/CodeCompleteConsumer.h"
  #include "clang/Sema/Sema.h"
@@ -472,10 +472,10 @@ index d018d4c..2d51570 100644
    std::swap(OldCollectStats, S.CollectStats);
    if (PrintStats) {
      llvm::errs() << "\nSTATISTICS:\n";
-diff --git lib/Sema/Sema.cpp lib/Sema/Sema.cpp
-index e7b0914..1363dc3 100644
---- lib/Sema/Sema.cpp
-+++ lib/Sema/Sema.cpp
+diff --git a/lib/Sema/Sema.cpp b/lib/Sema/Sema.cpp
+index e7b0914641..1363dc3dcd 100644
+--- a/lib/Sema/Sema.cpp
++++ b/lib/Sema/Sema.cpp
 @@ -37,6 +37,7 @@
  #include "clang/Sema/SemaConsumer.h"
  #include "clang/Sema/SemaInternal.h"
@@ -484,10 +484,10 @@ index e7b0914..1363dc3 100644
  #include "llvm/ADT/DenseMap.h"
  #include "llvm/ADT/SmallSet.h"
  using namespace clang;
-diff --git lib/Sema/SemaTemplateInstantiate.cpp lib/Sema/SemaTemplateInstantiate.cpp
-index fe92dd8..7c9cd43 100644
---- lib/Sema/SemaTemplateInstantiate.cpp
-+++ lib/Sema/SemaTemplateInstantiate.cpp
+diff --git a/lib/Sema/SemaTemplateInstantiate.cpp b/lib/Sema/SemaTemplateInstantiate.cpp
+index fe92dd8ac6..7c9cd436be 100644
+--- a/lib/Sema/SemaTemplateInstantiate.cpp
++++ b/lib/Sema/SemaTemplateInstantiate.cpp
 @@ -25,6 +25,7 @@
  #include "clang/Sema/PrettyDeclStackTrace.h"
  #include "clang/Sema/Template.h"
@@ -557,10 +557,10 @@ index fe92dd8..7c9cd43 100644
      }
  
      // The inner context was transparent for SFINAE. If it occurred within a
-diff --git lib/Sema/SemaTemplateInstantiateDecl.cpp lib/Sema/SemaTemplateInstantiateDecl.cpp
-index 148ce24..e649d6c 100644
---- lib/Sema/SemaTemplateInstantiateDecl.cpp
-+++ lib/Sema/SemaTemplateInstantiateDecl.cpp
+diff --git a/lib/Sema/SemaTemplateInstantiateDecl.cpp b/lib/Sema/SemaTemplateInstantiateDecl.cpp
+index 148ce24293..e649d6c946 100644
+--- a/lib/Sema/SemaTemplateInstantiateDecl.cpp
++++ b/lib/Sema/SemaTemplateInstantiateDecl.cpp
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
  #include "clang/Sema/PrettyDeclStackTrace.h"
@@ -582,10 +582,10 @@ index 148ce24..e649d6c 100644
      }
    }
  
-diff --git lib/Sema/SemaType.cpp lib/Sema/SemaType.cpp
-index 8c8402e..f66ade4 100644
---- lib/Sema/SemaType.cpp
-+++ lib/Sema/SemaType.cpp
+diff --git a/lib/Sema/SemaType.cpp b/lib/Sema/SemaType.cpp
+index 8c8402e75e..f66ade4d1b 100644
+--- a/lib/Sema/SemaType.cpp
++++ b/lib/Sema/SemaType.cpp
 @@ -30,6 +30,7 @@
  #include "clang/Sema/ScopeInfo.h"
  #include "clang/Sema/SemaInternal.h"
@@ -609,12 +609,12 @@ index 8c8402e..f66ade4 100644
      }
  
      return false;
-diff --git test/Sema/templight-memoization.cpp test/Sema/templight-memoization.cpp
+diff --git a/test/Sema/templight-memoization.cpp b/test/Sema/templight-memoization.cpp
 new file mode 100644
-index 0000000..cd442c2
+index 0000000000..95957eb509
 --- /dev/null
-+++ test/Sema/templight-memoization.cpp
-@@ -0,0 +1,31 @@
++++ b/test/Sema/templight-memoization.cpp
+@@ -0,0 +1,38 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <class T>
@@ -634,8 +634,14 @@ index 0000000..cd442c2
 +
 +// CHECK-LABEL: {{^---$}}
 +// CHECK-LABEL: {{^---$}}
-+
 +// CHECK-LABEL: {{^---$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK-LABEL: {{^---$}}
++
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
@@ -646,12 +652,13 @@ index 0000000..cd442c2
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+1]]{{:10'$}}
 +foo<int> y;
-diff --git test/Sema/templight-nested-memoization.cpp test/Sema/templight-nested-memoization.cpp
++
+diff --git a/test/Sema/templight-nested-memoization.cpp b/test/Sema/templight-nested-memoization.cpp
 new file mode 100644
-index 0000000..a14ef5a
+index 0000000000..92403dfe3f
 --- /dev/null
-+++ test/Sema/templight-nested-memoization.cpp
-@@ -0,0 +1,91 @@
++++ b/test/Sema/templight-nested-memoization.cpp
+@@ -0,0 +1,150 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <int N>
@@ -676,17 +683,50 @@ index 0000000..a14ef5a
 +// CHECK: {{^name:[ ]+'fib<4>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+66]]{{:8'$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+124]]{{:8'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<4>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+119]]{{:8'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<4>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+114]]{{:8'$}}
++//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<3>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<3>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++//
++// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
@@ -707,11 +747,23 @@ index 0000000..a14ef5a
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<2>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
@@ -722,12 +774,24 @@ index 0000000..a14ef5a
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
++//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<3>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'fib<3>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
++//
++// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
@@ -738,17 +802,19 @@ index 0000000..a14ef5a
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
 +// CHECK-LABEL: {{^---$}}
++//
 +// CHECK: {{^name:[ ]+'fib<4>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+1]]{{:8'$}}
 +fib<4> x;
-diff --git test/Sema/templight-nested-template-instantiation.cpp test/Sema/templight-nested-template-instantiation.cpp
++
+diff --git a/test/Sema/templight-nested-template-instantiation.cpp b/test/Sema/templight-nested-template-instantiation.cpp
 new file mode 100644
-index 0000000..1184253
+index 0000000000..f63bf222ec
 --- /dev/null
-+++ test/Sema/templight-nested-template-instantiation.cpp
-@@ -0,0 +1,39 @@
++++ b/test/Sema/templight-nested-template-instantiation.cpp
+@@ -0,0 +1,72 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <int N>
@@ -761,12 +827,34 @@ index 0000000..1184253
 +// CHECK: {{^name:[ ]+'foo<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+26]]{{:8'$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+59]]{{:8'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+54]]{{:8'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<2>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+49]]{{:8'$}}
++//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<1>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<1>'$}}
++// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<0>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
@@ -777,9 +865,20 @@ index 0000000..1184253
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
++// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<1>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
++// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
++// CHECK-LABEL: {{^---$}}
++// CHECK: {{^name:[ ]+'foo<1>'$}}
++// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
@@ -788,11 +887,11 @@ index 0000000..1184253
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+1]]{{:8'$}}
 +foo<2> x;
-diff --git test/Sema/templight-one-instantiation.cpp test/Sema/templight-one-instantiation.cpp
+diff --git a/test/Sema/templight-one-instantiation.cpp b/test/Sema/templight-one-instantiation.cpp
 new file mode 100644
-index 0000000..43d817d
+index 0000000000..43d817d6fd
 --- /dev/null
-+++ test/Sema/templight-one-instantiation.cpp
++++ b/test/Sema/templight-one-instantiation.cpp
 @@ -0,0 +1,16 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -810,10 +909,10 @@ index 0000000..43d817d
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:}}[[@LINE+1]]{{:10'$}}
 +foo<int> x;
-diff --git tools/CMakeLists.txt tools/CMakeLists.txt
-index b0c97f0..86564f2 100644
---- tools/CMakeLists.txt
-+++ tools/CMakeLists.txt
+diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
+index b0c97f0f1e..86564f217f 100644
+--- a/tools/CMakeLists.txt
++++ b/tools/CMakeLists.txt
 @@ -30,3 +30,4 @@ add_llvm_external_project(clang-tools-extra extra)
  
  # libclang may require clang-tidy in clang-tools-extra.
