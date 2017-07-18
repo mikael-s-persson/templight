@@ -13,9 +13,11 @@ message TemplightEntry {
     PriorTemplateArgumentSubstitution = 5;
     DefaultTemplateArgumentChecking = 6;
     ExceptionSpecInstantiation = 7;
-    Memoization = 8;
+    DeclaringSpecialMember = 8;
+    DefiningSynthesizedFunction = 9;
+    Memoization = 10;
   }
-  
+
   message TemplateName {
 //     oneof rep {
 //       string name = 1;
@@ -25,14 +27,14 @@ message TemplightEntry {
     optional bytes compressed_name = 2;
     optional uint32 dict_id = 3;
   }
-  
+
   message SourceLocation {
     optional string file_name = 1;
     required uint32 file_id = 2;
     required uint32 line = 3;
     optional uint32 column = 4;
   }
-  
+
   message Begin {
     required SynthesisKind kind = 1;
     required TemplateName name = 2;
@@ -41,12 +43,12 @@ message TemplightEntry {
     optional uint64 memory_usage = 5;
     optional SourceLocation template_origin = 6;
   }
-  
+
   message End {
     optional double time_stamp = 1;
     optional uint64 memory_usage = 2;
   }
-  
+
 //   oneof begin_or_end {
 //     Begin begin = 1;
 //     End end = 2;
