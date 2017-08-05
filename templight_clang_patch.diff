@@ -222,14 +222,13 @@ index e6feaf7447..52b80c5de3 100644
      return false;
  
 diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 9621889b27..e7556181e3 100644
+index 9621889b27..e782884b42 100644
 --- a/lib/Frontend/FrontendActions.cpp
 +++ b/lib/Frontend/FrontendActions.cpp
-@@ -18,12 +18,16 @@
+@@ -18,12 +18,15 @@
  #include "clang/Lex/HeaderSearch.h"
  #include "clang/Lex/Preprocessor.h"
  #include "clang/Lex/PreprocessorOptions.h"
-+#include "clang/Sema/Sema.h"
 +#include "clang/Sema/TemplateInstCallbacks.h"
  #include "clang/Serialization/ASTReader.h"
  #include "clang/Serialization/ASTWriter.h"
@@ -242,7 +241,7 @@ index 9621889b27..e7556181e3 100644
  #include <memory>
  #include <system_error>
  
-@@ -246,6 +250,149 @@ void VerifyPCHAction::ExecuteAction() {
+@@ -246,6 +249,149 @@ void VerifyPCHAction::ExecuteAction() {
  }
  
  namespace {
