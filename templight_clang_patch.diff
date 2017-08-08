@@ -1,8 +1,8 @@
 diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
-index 1132d1345f..dea639f28e 100644
+index 912abd9d48..46a8ac9ae0 100644
 --- a/include/clang/Driver/CC1Options.td
 +++ b/include/clang/Driver/CC1Options.td
-@@ -494,6 +494,8 @@ def ast_dump : Flag<["-"], "ast-dump">,
+@@ -500,6 +500,8 @@ def ast_dump : Flag<["-"], "ast-dump">,
    HelpText<"Build ASTs and then debug dump them">;
  def ast_dump_all : Flag<["-"], "ast-dump-all">,
    HelpText<"Build ASTs and then debug dump them, forcing deserialization">;
@@ -12,10 +12,10 @@ index 1132d1345f..dea639f28e 100644
    HelpText<"Build ASTs and then debug dump their name lookup tables">;
  def ast_view : Flag<["-"], "ast-view">,
 diff --git a/include/clang/Frontend/FrontendActions.h b/include/clang/Frontend/FrontendActions.h
-index 84db293c46..bf8120f663 100644
+index c45aeaa208..9c575b5587 100644
 --- a/include/clang/Frontend/FrontendActions.h
 +++ b/include/clang/Frontend/FrontendActions.h
-@@ -160,6 +160,14 @@ public:
+@@ -162,6 +162,14 @@ public:
    bool hasCodeCompletionSupport() const override { return false; }
  };
  
@@ -62,7 +62,7 @@ index 031ee7df70..766bcd3465 100644
  /// ExecuteCompilerInvocation - Execute the given actions described by the
  /// compiler invocation object in the given compiler instance.
 diff --git a/include/clang/Sema/Sema.h b/include/clang/Sema/Sema.h
-index 1dedf4ba24..70fe100cab 100644
+index e804a7962a..d0321c0134 100644
 --- a/include/clang/Sema/Sema.h
 +++ b/include/clang/Sema/Sema.h
 @@ -172,6 +172,7 @@ namespace clang {
@@ -73,7 +73,7 @@ index 1dedf4ba24..70fe100cab 100644
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -7026,6 +7027,12 @@ public:
+@@ -7053,6 +7054,12 @@ public:
        /// We are defining a synthesized function (such as a defaulted special
        /// member).
        DefiningSynthesizedFunction,
@@ -86,7 +86,7 @@ index 1dedf4ba24..70fe100cab 100644
      } Kind;
  
      /// \brief Was the enclosing context a non-instantiation SFINAE context?
-@@ -7134,6 +7141,13 @@ public:
+@@ -7161,6 +7168,13 @@ public:
    // FIXME: Does this belong in Sema? It's tough to implement it anywhere else.
    unsigned LastEmittedCodeSynthesisContextDepth = 0;
  
@@ -201,10 +201,10 @@ index 0000000000..20c2508593
 +
 +#endif
 diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
-index e6feaf7447..52b80c5de3 100644
+index 003ea55471..dbc1ed1e63 100644
 --- a/lib/Frontend/CompilerInvocation.cpp
 +++ b/lib/Frontend/CompilerInvocation.cpp
-@@ -1208,6 +1208,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+@@ -1235,6 +1235,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
        Opts.ProgramAction = frontend::PrintPreamble; break;
      case OPT_E:
        Opts.ProgramAction = frontend::PrintPreprocessedInput; break;
@@ -213,7 +213,7 @@ index e6feaf7447..52b80c5de3 100644
      case OPT_rewrite_macros:
        Opts.ProgramAction = frontend::RewriteMacros; break;
      case OPT_rewrite_objc:
-@@ -2405,6 +2407,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
+@@ -2435,6 +2437,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
    case frontend::RewriteObjC:
    case frontend::RewriteTest:
    case frontend::RunAnalysis:
@@ -222,7 +222,7 @@ index e6feaf7447..52b80c5de3 100644
      return false;
  
 diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 9621889b27..e782884b42 100644
+index d42400183a..b18f6359e7 100644
 --- a/lib/Frontend/FrontendActions.cpp
 +++ b/lib/Frontend/FrontendActions.cpp
 @@ -18,12 +18,15 @@
@@ -241,7 +241,7 @@ index 9621889b27..e782884b42 100644
  #include <memory>
  #include <system_error>
  
-@@ -246,6 +249,149 @@ void VerifyPCHAction::ExecuteAction() {
+@@ -256,6 +259,149 @@ void VerifyPCHAction::ExecuteAction() {
  }
  
  namespace {
@@ -392,10 +392,10 @@ index 9621889b27..e782884b42 100644
    /// file.
    class DumpModuleInfoListener : public ASTReaderListener {
 diff --git a/lib/FrontendTool/ExecuteCompilerInvocation.cpp b/lib/FrontendTool/ExecuteCompilerInvocation.cpp
-index a7c140188b..4a2a444d0a 100644
+index f35769c965..fcaf4a943a 100644
 --- a/lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +++ b/lib/FrontendTool/ExecuteCompilerInvocation.cpp
-@@ -31,6 +31,8 @@
+@@ -32,6 +32,8 @@
  using namespace clang;
  using namespace llvm::opt;
  
@@ -404,7 +404,7 @@ index a7c140188b..4a2a444d0a 100644
  static std::unique_ptr<FrontendAction>
  CreateFrontendBaseAction(CompilerInstance &CI) {
    using namespace clang::frontend;
-@@ -62,6 +64,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
+@@ -63,6 +65,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
    case ParseSyntaxOnly:        return llvm::make_unique<SyntaxOnlyAction>();
    case ModuleFileInfo:         return llvm::make_unique<DumpModuleInfoAction>();
    case VerifyPCH:              return llvm::make_unique<VerifyPCHAction>();
@@ -412,7 +412,7 @@ index a7c140188b..4a2a444d0a 100644
  
    case PluginAction: {
      for (FrontendPluginRegistry::iterator it =
-@@ -121,7 +124,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
+@@ -122,7 +125,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
  #endif
  }
  
@@ -421,7 +421,7 @@ index a7c140188b..4a2a444d0a 100644
  CreateFrontendAction(CompilerInstance &CI) {
    // Create the underlying action.
    std::unique_ptr<FrontendAction> Act = CreateFrontendBaseAction(CI);
-@@ -172,7 +175,7 @@ CreateFrontendAction(CompilerInstance &CI) {
+@@ -173,7 +176,7 @@ CreateFrontendAction(CompilerInstance &CI) {
    return Act;
  }
  
@@ -430,7 +430,7 @@ index a7c140188b..4a2a444d0a 100644
    // Honor -help.
    if (Clang->getFrontendOpts().ShowHelp) {
      std::unique_ptr<OptTable> Opts = driver::createDriverOptTable();
-@@ -252,3 +255,5 @@ bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
+@@ -254,3 +257,5 @@ bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
      BuryPointer(std::move(Act));
    return Success;
  }
@@ -476,7 +476,7 @@ index d018d4c08e..2d51570700 100644
    if (PrintStats) {
      llvm::errs() << "\nSTATISTICS:\n";
 diff --git a/lib/Sema/Sema.cpp b/lib/Sema/Sema.cpp
-index e7b0914641..1363dc3dcd 100644
+index e99e73fc8d..4ab709dd6a 100644
 --- a/lib/Sema/Sema.cpp
 +++ b/lib/Sema/Sema.cpp
 @@ -37,6 +37,7 @@
@@ -488,7 +488,7 @@ index e7b0914641..1363dc3dcd 100644
  #include "llvm/ADT/SmallSet.h"
  using namespace clang;
 diff --git a/lib/Sema/SemaTemplateInstantiate.cpp b/lib/Sema/SemaTemplateInstantiate.cpp
-index fe92dd8ac6..7c9cd436be 100644
+index f4f0c804ae..5c8ff01e9b 100644
 --- a/lib/Sema/SemaTemplateInstantiate.cpp
 +++ b/lib/Sema/SemaTemplateInstantiate.cpp
 @@ -25,6 +25,7 @@
@@ -561,7 +561,7 @@ index fe92dd8ac6..7c9cd436be 100644
  
      // The inner context was transparent for SFINAE. If it occurred within a
 diff --git a/lib/Sema/SemaTemplateInstantiateDecl.cpp b/lib/Sema/SemaTemplateInstantiateDecl.cpp
-index 148ce24293..e649d6c946 100644
+index abe912fb54..095c14ea32 100644
 --- a/lib/Sema/SemaTemplateInstantiateDecl.cpp
 +++ b/lib/Sema/SemaTemplateInstantiateDecl.cpp
 @@ -23,6 +23,7 @@
@@ -572,7 +572,7 @@ index 148ce24293..e649d6c946 100644
  
  using namespace clang;
  
-@@ -3634,8 +3635,12 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
+@@ -3637,8 +3638,12 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
        assert(FunTmpl->getTemplatedDecl() == Tmpl &&
               "Deduction from the wrong function template?");
        (void) FunTmpl;
@@ -586,10 +586,10 @@ index 148ce24293..e649d6c946 100644
    }
  
 diff --git a/lib/Sema/SemaType.cpp b/lib/Sema/SemaType.cpp
-index 8c8402e75e..f66ade4d1b 100644
+index 598a11300b..2d1b1a8924 100644
 --- a/lib/Sema/SemaType.cpp
 +++ b/lib/Sema/SemaType.cpp
-@@ -30,6 +30,7 @@
+@@ -31,6 +31,7 @@
  #include "clang/Sema/ScopeInfo.h"
  #include "clang/Sema/SemaInternal.h"
  #include "clang/Sema/Template.h"
@@ -597,7 +597,7 @@ index 8c8402e75e..f66ade4d1b 100644
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
  #include "llvm/ADT/StringSwitch.h"
-@@ -7254,6 +7255,14 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
+@@ -7274,6 +7275,14 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
          diagnoseMissingImport(Loc, SuggestedDef, MissingImportKind::Definition,
                                /*Recover*/TreatAsComplete);
        return !TreatAsComplete;
@@ -1361,10 +1361,10 @@ index 0000000000..056cc4785b
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+1]]{{:6'$}}
 +B<A> b;
 diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
-index b0c97f0f1e..86564f217f 100644
+index 17ad9f4a1a..bba853ab3f 100644
 --- a/tools/CMakeLists.txt
 +++ b/tools/CMakeLists.txt
-@@ -30,3 +30,4 @@ add_llvm_external_project(clang-tools-extra extra)
+@@ -33,3 +33,4 @@ add_llvm_external_project(clang-tools-extra extra)
  
  # libclang may require clang-tidy in clang-tools-extra.
  add_clang_subdirectory(libclang)
