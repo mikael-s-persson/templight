@@ -674,6 +674,7 @@ public:
     std::string user_in;
     while(true) {
       llvm::outs() << "(tdb) ";
+      llvm::outs().flush();
       getLineFromStdIn(user_in);
       if ( user_in == "" )
         user_in = LastUserCommand;
