@@ -1,8 +1,8 @@
-diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
-index d73a34519f..a6a09b48a8 100644
---- a/include/clang/Driver/CC1Options.td
-+++ b/include/clang/Driver/CC1Options.td
-@@ -517,6 +517,8 @@ def ast_dump : Flag<["-"], "ast-dump">,
+Index: include/clang/Driver/CC1Options.td
+===================================================================
+--- include/clang/Driver/CC1Options.td	(revision 316272)
++++ include/clang/Driver/CC1Options.td	(working copy)
+@@ -523,6 +523,8 @@
    HelpText<"Build ASTs and then debug dump them">;
  def ast_dump_all : Flag<["-"], "ast-dump-all">,
    HelpText<"Build ASTs and then debug dump them, forcing deserialization">;
@@ -11,11 +11,11 @@ index d73a34519f..a6a09b48a8 100644
  def ast_dump_lookups : Flag<["-"], "ast-dump-lookups">,
    HelpText<"Build ASTs and then debug dump their name lookup tables">;
  def ast_view : Flag<["-"], "ast-view">,
-diff --git a/include/clang/Frontend/FrontendActions.h b/include/clang/Frontend/FrontendActions.h
-index c45aeaa208..9c575b5587 100644
---- a/include/clang/Frontend/FrontendActions.h
-+++ b/include/clang/Frontend/FrontendActions.h
-@@ -162,6 +162,14 @@ public:
+Index: include/clang/Frontend/FrontendActions.h
+===================================================================
+--- include/clang/Frontend/FrontendActions.h	(revision 316272)
++++ include/clang/Frontend/FrontendActions.h	(working copy)
+@@ -162,6 +162,14 @@
    bool hasCodeCompletionSupport() const override { return false; }
  };
  
@@ -30,11 +30,11 @@ index c45aeaa208..9c575b5587 100644
  /**
   * \brief Frontend action adaptor that merges ASTs together.
   *
-diff --git a/include/clang/Frontend/FrontendOptions.h b/include/clang/Frontend/FrontendOptions.h
-index 5192a3774c..c609500516 100644
---- a/include/clang/Frontend/FrontendOptions.h
-+++ b/include/clang/Frontend/FrontendOptions.h
-@@ -58,6 +58,7 @@ namespace frontend {
+Index: include/clang/Frontend/FrontendOptions.h
+===================================================================
+--- include/clang/Frontend/FrontendOptions.h	(revision 316272)
++++ include/clang/Frontend/FrontendOptions.h	(working copy)
+@@ -58,6 +58,7 @@
      RewriteObjC,            ///< ObjC->C Rewriter.
      RewriteTest,            ///< Rewriter playground
      RunAnalysis,            ///< Run one or more source code analyses.
@@ -42,11 +42,11 @@ index 5192a3774c..c609500516 100644
      MigrateSource,          ///< Run migrator.
      RunPreprocessorOnly     ///< Just lex, no output.
    };
-diff --git a/include/clang/FrontendTool/Utils.h b/include/clang/FrontendTool/Utils.h
-index 031ee7df70..766bcd3465 100644
---- a/include/clang/FrontendTool/Utils.h
-+++ b/include/clang/FrontendTool/Utils.h
-@@ -15,9 +15,14 @@
+Index: include/clang/FrontendTool/Utils.h
+===================================================================
+--- include/clang/FrontendTool/Utils.h	(revision 316272)
++++ include/clang/FrontendTool/Utils.h	(working copy)
+@@ -15,10 +15,19 @@
  #ifndef LLVM_CLANG_FRONTENDTOOL_UTILS_H
  #define LLVM_CLANG_FRONTENDTOOL_UTILS_H
  
@@ -56,24 +56,29 @@ index 031ee7df70..766bcd3465 100644
  
  class CompilerInstance;
 +class FrontendAction;
-+
-+std::unique_ptr<FrontendAction> CreateFrontendAction(CompilerInstance &CI);
  
++/// Construct the FrontendAction of a compiler invocation based on the
++/// options specified for the compiler invocation.
++///
++/// \return - The created FrontendAction object
++std::unique_ptr<FrontendAction> CreateFrontendAction(CompilerInstance &CI);
++
  /// ExecuteCompilerInvocation - Execute the given actions described by the
  /// compiler invocation object in the given compiler instance.
-diff --git a/include/clang/Sema/Sema.h b/include/clang/Sema/Sema.h
-index fc34f6816f..e9ec955a39 100644
---- a/include/clang/Sema/Sema.h
-+++ b/include/clang/Sema/Sema.h
-@@ -172,6 +172,7 @@ namespace clang {
+ ///
+Index: include/clang/Sema/Sema.h
+===================================================================
+--- include/clang/Sema/Sema.h	(revision 316272)
++++ include/clang/Sema/Sema.h	(working copy)
+@@ -172,6 +172,7 @@
    class TemplateArgumentList;
    class TemplateArgumentLoc;
    class TemplateDecl;
-+  class TemplateInstantiationCallbacks;
++  class TemplateInstantiationCallback;
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -7065,6 +7066,12 @@ public:
+@@ -7103,6 +7104,12 @@
        /// We are defining a synthesized function (such as a defaulted special
        /// member).
        DefiningSynthesizedFunction,
@@ -86,7 +91,7 @@ index fc34f6816f..e9ec955a39 100644
      } Kind;
  
      /// \brief Was the enclosing context a non-instantiation SFINAE context?
-@@ -7173,6 +7180,13 @@ public:
+@@ -7211,6 +7218,13 @@
    // FIXME: Does this belong in Sema? It's tough to implement it anywhere else.
    unsigned LastEmittedCodeSynthesisContextDepth = 0;
  
@@ -95,18 +100,17 @@ index fc34f6816f..e9ec955a39 100644
 +  ///
 +  /// This callbacks is used to print, trace or track template
 +  /// instantiations as they are being constructed.
-+  std::unique_ptr<TemplateInstantiationCallbacks> TemplateInstCallbacksChain;
++  std::vector<std::unique_ptr<TemplateInstantiationCallback>> TemplateInstCallbacks;
 +
    /// \brief The current index into pack expansion arguments that will be
    /// used for substitution of parameter packs.
    ///
-diff --git a/include/clang/Sema/TemplateInstCallbacks.h b/include/clang/Sema/TemplateInstCallbacks.h
-new file mode 100644
-index 0000000000..20c2508593
---- /dev/null
-+++ b/include/clang/Sema/TemplateInstCallbacks.h
-@@ -0,0 +1,94 @@
-+//===- TemplateInstCallbacks.h - Template Instantiation Callbacks - C++ --===//
+Index: include/clang/Sema/TemplateInstCallback.h
+===================================================================
+--- include/clang/Sema/TemplateInstCallback.h	(nonexistent)
++++ include/clang/Sema/TemplateInstCallback.h	(working copy)
+@@ -0,0 +1,93 @@
++//===- TemplateInstCallback.h - Template Instantiation Callback - C++ --===//
 +//
 +//                     The LLVM Compiler Infrastructure
 +//
@@ -115,96 +119,95 @@ index 0000000000..20c2508593
 +//
 +//===---------------------------------------------------------------------===//
 +//
-+// This file defines the TemplateInstantiationCallbacks class, which is the
++// This file defines the TemplateInstantiationCallback class, which is the
 +// base class for callbacks that will be notified at template instantiations.
 +//
 +//===---------------------------------------------------------------------===//
 +
-+#ifndef LLVM_CLANG_TEMPLATE_INST_CALLBACKS_H
-+#define LLVM_CLANG_TEMPLATE_INST_CALLBACKS_H
++#ifndef LLVM_CLANG_TEMPLATE_INST_CALLBACK_H
++#define LLVM_CLANG_TEMPLATE_INST_CALLBACK_H
 +
-+#include "clang/Basic/SourceLocation.h"
 +#include "clang/Sema/Sema.h"
-+
-+#include "llvm/Support/Compiler.h"
-+#include <memory>
 +
 +namespace clang {
 +
 +/// \brief This is a base class for callbacks that will be notified at every
 +/// template instantiation.
-+class TemplateInstantiationCallbacks {
++class TemplateInstantiationCallback {
 +public:
++  virtual ~TemplateInstantiationCallback() {}
 +
 +  /// \brief Called before doing AST-parsing.
-+  void initialize(const Sema &TheSema) {
-+    this->initializeImpl(TheSema);
-+    if (NextCallbacks)
-+      NextCallbacks->initialize(TheSema);
-+  };
++  virtual void initialize(const Sema &TheSema) = 0;
 +
 +  /// \brief Called after AST-parsing is completed.
-+  void finalize(const Sema &TheSema) {
-+    this->finalizeImpl(TheSema);
-+    if (NextCallbacks)
-+      NextCallbacks->finalize(TheSema);
-+  };
++  virtual void finalize(const Sema &TheSema) = 0;
 +
 +  /// \brief Called when instantiation of a template just began.
-+  void atTemplateBegin(const Sema &TheSema,
-+                       const Sema::CodeSynthesisContext &Inst) {
-+    this->atTemplateBeginImpl(TheSema, Inst);
-+    if (NextCallbacks)
-+      NextCallbacks->atTemplateBegin(TheSema, Inst);
-+  };
++  virtual void atTemplateBegin(const Sema &TheSema,
++                               const Sema::CodeSynthesisContext &Inst) = 0;
 +
 +  /// \brief Called when instantiation of a template is just about to end.
-+  void atTemplateEnd(const Sema &TheSema,
-+                     const Sema::CodeSynthesisContext &Inst) {
-+    this->atTemplateEndImpl(TheSema, Inst);
-+    if (NextCallbacks)
-+      NextCallbacks->atTemplateEnd(TheSema, Inst);
-+  };
-+
-+  virtual ~TemplateInstantiationCallbacks() { };
-+
-+  /// \brief Appends a new observer to the end of this list.
-+  /// \note This function uses a tail-call recursion.
-+  static void appendNewCallbacks(
-+      std::unique_ptr<TemplateInstantiationCallbacks> &CurrentChain,
-+      TemplateInstantiationCallbacks *NewCallbacks) {
-+    if (!CurrentChain) {
-+      CurrentChain.reset(NewCallbacks);
-+      return;
-+    };
-+    appendNewCallbacks(CurrentChain->NextCallbacks, NewCallbacks);
-+  };
-+
-+protected:
-+
-+  /// \brief Called before doing AST-parsing.
-+  virtual void initializeImpl(const Sema &TheSema) { };
-+  /// \brief Called after AST-parsing is completed.
-+  virtual void finalizeImpl(const Sema &TheSema) { };
-+
-+  /// \brief Called when instantiation of a template just began.
-+  virtual void atTemplateBeginImpl(const Sema &TheSema,
-+                                   const Sema::CodeSynthesisContext &Inst) {};
-+  /// \brief Called when instantiation of a template is just about to end.
-+  virtual void atTemplateEndImpl(const Sema &TheSema,
-+                                 const Sema::CodeSynthesisContext &Inst) {};
-+
-+  std::unique_ptr<TemplateInstantiationCallbacks> NextCallbacks;
++  virtual void atTemplateEnd(const Sema &TheSema,
++                             const Sema::CodeSynthesisContext &Inst) = 0;
 +};
++
++template <class TemplateInstantiationCallbackPtrs>
++void initialize(TemplateInstantiationCallbackPtrs& Callbacks_, const Sema &TheSema)
++{
++  for (auto& C : Callbacks_)
++  {
++    if (C)
++    {
++      C->initialize(TheSema);
++    }
++  }
++}
++
++template <class TemplateInstantiationCallbackPtrs>
++void finalize(TemplateInstantiationCallbackPtrs& Callbacks_, const Sema &TheSema)
++{
++  for (auto& C : Callbacks_)
++  {
++    if (C)
++    {
++      C->finalize(TheSema);
++    }
++  }
++}
++
++template <class TemplateInstantiationCallbackPtrs>
++void atTemplateBegin(TemplateInstantiationCallbackPtrs& Callbacks_, const Sema &TheSema, const Sema::CodeSynthesisContext &Inst)
++{
++  for (auto& C : Callbacks_)
++  {
++    if (C)
++    {
++      C->atTemplateBegin(TheSema, Inst);
++    }
++  }
++}
++
++template <class TemplateInstantiationCallbackPtrs>
++void atTemplateEnd(TemplateInstantiationCallbackPtrs& Callbacks_, const Sema &TheSema, const Sema::CodeSynthesisContext &Inst)
++{
++  for (auto& C : Callbacks_)
++  {
++    if (C)
++    {
++      C->atTemplateEnd(TheSema, Inst);
++    }
++  }
++}
 +
 +}
 +
 +#endif
-diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
-index c4e8976cf3..f9b970ae7a 100644
---- a/lib/Frontend/CompilerInvocation.cpp
-+++ b/lib/Frontend/CompilerInvocation.cpp
-@@ -1273,6 +1273,8 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+Index: lib/Frontend/CompilerInvocation.cpp
+===================================================================
+--- lib/Frontend/CompilerInvocation.cpp	(revision 316272)
++++ lib/Frontend/CompilerInvocation.cpp	(working copy)
+@@ -1277,6 +1277,8 @@
        Opts.ProgramAction = frontend::PrintPreamble; break;
      case OPT_E:
        Opts.ProgramAction = frontend::PrintPreprocessedInput; break;
@@ -213,7 +216,7 @@ index c4e8976cf3..f9b970ae7a 100644
      case OPT_rewrite_macros:
        Opts.ProgramAction = frontend::RewriteMacros; break;
      case OPT_rewrite_objc:
-@@ -2498,6 +2500,7 @@ static bool isStrictlyPreprocessorAction(frontend::ActionKind Action) {
+@@ -2517,6 +2519,7 @@
    case frontend::RewriteObjC:
    case frontend::RewriteTest:
    case frontend::RunAnalysis:
@@ -221,18 +224,19 @@ index c4e8976cf3..f9b970ae7a 100644
    case frontend::MigrateSource:
      return false;
  
-diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 3e3483d2c6..6373615a05 100644
---- a/lib/Frontend/FrontendActions.cpp
-+++ b/lib/Frontend/FrontendActions.cpp
-@@ -18,12 +18,15 @@
+Index: lib/Frontend/FrontendActions.cpp
+===================================================================
+--- lib/Frontend/FrontendActions.cpp	(revision 316272)
++++ lib/Frontend/FrontendActions.cpp	(working copy)
+@@ -18,6 +18,7 @@
  #include "clang/Lex/HeaderSearch.h"
  #include "clang/Lex/Preprocessor.h"
  #include "clang/Lex/PreprocessorOptions.h"
-+#include "clang/Sema/TemplateInstCallbacks.h"
++#include "clang/Sema/TemplateInstCallback.h"
  #include "clang/Serialization/ASTReader.h"
  #include "clang/Serialization/ASTWriter.h"
  #include "llvm/Support/FileSystem.h"
+@@ -24,6 +25,8 @@
  #include "llvm/Support/MemoryBuffer.h"
  #include "llvm/Support/Path.h"
  #include "llvm/Support/raw_ostream.h"
@@ -241,7 +245,7 @@ index 3e3483d2c6..6373615a05 100644
  #include <memory>
  #include <system_error>
  
-@@ -256,6 +259,149 @@ void VerifyPCHAction::ExecuteAction() {
+@@ -256,6 +259,152 @@
  }
  
  namespace {
@@ -270,16 +274,20 @@ index 3e3483d2c6..6373615a05 100644
 +}
 +
 +namespace {
-+  class DefaultTemplateInstCallbacks : public TemplateInstantiationCallbacks {
++  class DefaultTemplateInstCallback : public TemplateInstantiationCallback {
 +  using CodeSynthesisContext = Sema::CodeSynthesisContext;
-+  protected:
-+    virtual void atTemplateBeginImpl(const Sema &TheSema,
++  public:
++    virtual void initialize(const Sema &) {}
++
++    virtual void finalize(const Sema &) {}
++
++    virtual void atTemplateBegin(const Sema &TheSema,
 +      const CodeSynthesisContext &Inst) override
 +    {
 +      DisplayTemplightEntry<true>(std::cout, TheSema, Inst);
 +    }
 +
-+    virtual void atTemplateEndImpl(const Sema &TheSema,
++    virtual void atTemplateEnd(const Sema &TheSema,
 +      const CodeSynthesisContext &Inst) override
 +    {
 +      DisplayTemplightEntry<false>(std::cout, TheSema, Inst);
@@ -381,9 +389,8 @@ index 3e3483d2c6..6373615a05 100644
 +    CI.createSema(getTranslationUnitKind(), CompletionConsumer);
 +  //<<--------------------------------------------------------------
 +
-+  TemplateInstantiationCallbacks::appendNewCallbacks(
-+    CI.getSema().TemplateInstCallbacksChain,
-+    new DefaultTemplateInstCallbacks());
++  CI.getSema().TemplateInstCallbacks.push_back(
++    llvm::make_unique<DefaultTemplateInstCallback>());
 +  ASTFrontendAction::ExecuteAction();
 +}
 +
@@ -391,10 +398,10 @@ index 3e3483d2c6..6373615a05 100644
    /// \brief AST reader listener that dumps module information for a module
    /// file.
    class DumpModuleInfoListener : public ASTReaderListener {
-diff --git a/lib/FrontendTool/ExecuteCompilerInvocation.cpp b/lib/FrontendTool/ExecuteCompilerInvocation.cpp
-index f35769c965..fcaf4a943a 100644
---- a/lib/FrontendTool/ExecuteCompilerInvocation.cpp
-+++ b/lib/FrontendTool/ExecuteCompilerInvocation.cpp
+Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
+===================================================================
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 316272)
++++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -32,6 +32,8 @@
  using namespace clang;
  using namespace llvm::opt;
@@ -404,7 +411,7 @@ index f35769c965..fcaf4a943a 100644
  static std::unique_ptr<FrontendAction>
  CreateFrontendBaseAction(CompilerInstance &CI) {
    using namespace clang::frontend;
-@@ -63,6 +65,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
+@@ -63,6 +65,7 @@
    case ParseSyntaxOnly:        return llvm::make_unique<SyntaxOnlyAction>();
    case ModuleFileInfo:         return llvm::make_unique<DumpModuleInfoAction>();
    case VerifyPCH:              return llvm::make_unique<VerifyPCHAction>();
@@ -412,7 +419,7 @@ index f35769c965..fcaf4a943a 100644
  
    case PluginAction: {
      for (FrontendPluginRegistry::iterator it =
-@@ -122,7 +125,7 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
+@@ -122,7 +125,7 @@
  #endif
  }
  
@@ -421,7 +428,7 @@ index f35769c965..fcaf4a943a 100644
  CreateFrontendAction(CompilerInstance &CI) {
    // Create the underlying action.
    std::unique_ptr<FrontendAction> Act = CreateFrontendBaseAction(CI);
-@@ -173,7 +176,7 @@ CreateFrontendAction(CompilerInstance &CI) {
+@@ -173,7 +176,7 @@
    return Act;
  }
  
@@ -430,37 +437,36 @@ index f35769c965..fcaf4a943a 100644
    // Honor -help.
    if (Clang->getFrontendOpts().ShowHelp) {
      std::unique_ptr<OptTable> Opts = driver::createDriverOptTable();
-@@ -254,3 +257,5 @@ bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
+@@ -254,3 +257,5 @@
      BuryPointer(std::move(Act));
    return Success;
  }
 +
 +}
-diff --git a/lib/Parse/ParseAST.cpp b/lib/Parse/ParseAST.cpp
-index d018d4c08e..2d51570700 100644
---- a/lib/Parse/ParseAST.cpp
-+++ b/lib/Parse/ParseAST.cpp
+Index: lib/Parse/ParseAST.cpp
+===================================================================
+--- lib/Parse/ParseAST.cpp	(revision 316272)
++++ lib/Parse/ParseAST.cpp	(working copy)
 @@ -21,6 +21,7 @@
  #include "clang/Sema/CodeCompleteConsumer.h"
  #include "clang/Sema/Sema.h"
  #include "clang/Sema/SemaConsumer.h"
-+#include "clang/Sema/TemplateInstCallbacks.h"
++#include "clang/Sema/TemplateInstCallback.h"
  #include "llvm/Support/CrashRecoveryContext.h"
  #include <cstdio>
  #include <memory>
-@@ -121,6 +122,11 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
+@@ -121,6 +122,10 @@
    bool OldCollectStats = PrintStats;
    std::swap(OldCollectStats, S.CollectStats);
  
 +  // Initialize the template instantiation observer chain.
 +  // FIXME: See note on "finalize" below.
-+  if (S.TemplateInstCallbacksChain)
-+    S.TemplateInstCallbacksChain->initialize(S);
++  initialize(S.TemplateInstCallbacks, S);
 +
    ASTConsumer *Consumer = &S.getASTConsumer();
  
    std::unique_ptr<Parser> ParseOP(
-@@ -158,6 +164,14 @@ void clang::ParseAST(Sema &S, bool PrintStats, bool SkipFunctionBodies) {
+@@ -158,6 +163,13 @@
    
    Consumer->HandleTranslationUnit(S.getASTContext());
  
@@ -469,37 +475,36 @@ index d018d4c08e..2d51570700 100644
 +  // Sema does not have a reliable "Finalize" function (it has a
 +  // destructor, but it is not guaranteed to be called ("-disable-free")).
 +  // So, do the initialization above and do the finalization here:
-+  if (S.TemplateInstCallbacksChain)
-+    S.TemplateInstCallbacksChain->finalize(S);
++  finalize(S.TemplateInstCallbacks, S);
 +
    std::swap(OldCollectStats, S.CollectStats);
    if (PrintStats) {
      llvm::errs() << "\nSTATISTICS:\n";
-diff --git a/lib/Sema/Sema.cpp b/lib/Sema/Sema.cpp
-index 66cb4976da..b6eab2324e 100644
---- a/lib/Sema/Sema.cpp
-+++ b/lib/Sema/Sema.cpp
+Index: lib/Sema/Sema.cpp
+===================================================================
+--- lib/Sema/Sema.cpp	(revision 316272)
++++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/SemaConsumer.h"
  #include "clang/Sema/SemaInternal.h"
  #include "clang/Sema/TemplateDeduction.h"
-+#include "clang/Sema/TemplateInstCallbacks.h"
++#include "clang/Sema/TemplateInstCallback.h"
  #include "llvm/ADT/DenseMap.h"
  #include "llvm/ADT/SmallSet.h"
  using namespace clang;
-diff --git a/lib/Sema/SemaTemplateInstantiate.cpp b/lib/Sema/SemaTemplateInstantiate.cpp
-index 1a06f9a2f8..23825dd435 100644
---- a/lib/Sema/SemaTemplateInstantiate.cpp
-+++ b/lib/Sema/SemaTemplateInstantiate.cpp
+Index: lib/Sema/SemaTemplateInstantiate.cpp
+===================================================================
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 316272)
++++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -25,6 +25,7 @@
  #include "clang/Sema/PrettyDeclStackTrace.h"
  #include "clang/Sema/Template.h"
  #include "clang/Sema/TemplateDeduction.h"
-+#include "clang/Sema/TemplateInstCallbacks.h"
++#include "clang/Sema/TemplateInstCallback.h"
  
  using namespace clang;
  using namespace sema;
-@@ -199,6 +200,9 @@ bool Sema::CodeSynthesisContext::isInstantiationRecord() const {
+@@ -199,6 +200,9 @@
    case DeclaringSpecialMember:
    case DefiningSynthesizedFunction:
      return false;
@@ -509,29 +514,27 @@ index 1a06f9a2f8..23825dd435 100644
    }
  
    llvm_unreachable("Invalid SynthesisKind!");
-@@ -235,6 +239,8 @@ Sema::InstantiatingTemplate::InstantiatingTemplate(
+@@ -235,6 +239,7 @@
          !SemaRef.InstantiatingSpecializations
               .insert(std::make_pair(Inst.Entity->getCanonicalDecl(), Inst.Kind))
               .second;
-+    if (SemaRef.TemplateInstCallbacksChain)
-+      SemaRef.TemplateInstCallbacksChain->atTemplateBegin(SemaRef, Inst);
++    atTemplateBegin(SemaRef.TemplateInstCallbacks, SemaRef, Inst);
    }
  }
  
-@@ -394,8 +400,11 @@ void Sema::InstantiatingTemplate::Clear() {
+@@ -394,8 +399,10 @@
            std::make_pair(Active.Entity, Active.Kind));
      }
  
--    SemaRef.popCodeSynthesisContext();
-+    if (SemaRef.TemplateInstCallbacksChain)
-+      SemaRef.TemplateInstCallbacksChain->atTemplateEnd(
++    atTemplateEnd(SemaRef.TemplateInstCallbacks,
 +        SemaRef, SemaRef.CodeSynthesisContexts.back());
- 
-+    SemaRef.popCodeSynthesisContext();
++
+     SemaRef.popCodeSynthesisContext();
+-
      Invalid = true;
    }
  }
-@@ -626,7 +635,7 @@ void Sema::PrintInstantiationStack() {
+@@ -626,7 +633,7 @@
          << cast<CXXRecordDecl>(Active->Entity) << Active->SpecialMember;
        break;
  
@@ -540,7 +543,7 @@ index 1a06f9a2f8..23825dd435 100644
        // FIXME: For synthesized members other than special members, produce a note.
        auto *MD = dyn_cast<CXXMethodDecl>(Active->Entity);
        auto CSM = MD ? getSpecialMember(MD) : CXXInvalid;
-@@ -635,6 +644,9 @@ void Sema::PrintInstantiationStack() {
+@@ -635,6 +642,9 @@
                       diag::note_member_synthesized_at)
            << CSM << Context.getTagDeclType(MD->getParent());
        }
@@ -550,7 +553,7 @@ index 1a06f9a2f8..23825dd435 100644
        break;
      }
    }
-@@ -682,6 +694,9 @@ Optional<TemplateDeductionInfo *> Sema::isSFINAEContext() const {
+@@ -682,6 +692,9 @@
        // This happens in a context unrelated to template instantiation, so
        // there is no SFINAE.
        return None;
@@ -560,63 +563,60 @@ index 1a06f9a2f8..23825dd435 100644
      }
  
      // The inner context was transparent for SFINAE. If it occurred within a
-diff --git a/lib/Sema/SemaTemplateInstantiateDecl.cpp b/lib/Sema/SemaTemplateInstantiateDecl.cpp
-index e702d3c723..d033e099f8 100644
---- a/lib/Sema/SemaTemplateInstantiateDecl.cpp
-+++ b/lib/Sema/SemaTemplateInstantiateDecl.cpp
+Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
+===================================================================
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 316272)
++++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
  #include "clang/Sema/PrettyDeclStackTrace.h"
  #include "clang/Sema/Template.h"
-+#include "clang/Sema/TemplateInstCallbacks.h"
++#include "clang/Sema/TemplateInstCallback.h"
  
  using namespace clang;
  
-@@ -3649,8 +3650,12 @@ TemplateDeclInstantiator::InitFunctionInstantiation(FunctionDecl *New,
+@@ -3651,8 +3652,10 @@
        assert(FunTmpl->getTemplatedDecl() == Tmpl &&
               "Deduction from the wrong function template?");
        (void) FunTmpl;
-+      if (SemaRef.TemplateInstCallbacksChain)
-+        SemaRef.TemplateInstCallbacksChain->atTemplateEnd(SemaRef, ActiveInst);
++      atTemplateEnd(SemaRef.TemplateInstCallbacks, SemaRef, ActiveInst);
        ActiveInst.Kind = ActiveInstType::TemplateInstantiation;
        ActiveInst.Entity = New;
-+      if (SemaRef.TemplateInstCallbacksChain)
-+        SemaRef.TemplateInstCallbacksChain->atTemplateBegin(SemaRef, ActiveInst);
++      atTemplateBegin(SemaRef.TemplateInstCallbacks, SemaRef, ActiveInst);
      }
    }
  
-diff --git a/lib/Sema/SemaType.cpp b/lib/Sema/SemaType.cpp
-index c4d7bb1f36..1ae01a4076 100644
---- a/lib/Sema/SemaType.cpp
-+++ b/lib/Sema/SemaType.cpp
+Index: lib/Sema/SemaType.cpp
+===================================================================
+--- lib/Sema/SemaType.cpp	(revision 316272)
++++ lib/Sema/SemaType.cpp	(working copy)
 @@ -31,6 +31,7 @@
  #include "clang/Sema/ScopeInfo.h"
  #include "clang/Sema/SemaInternal.h"
  #include "clang/Sema/Template.h"
-+#include "clang/Sema/TemplateInstCallbacks.h"
++#include "clang/Sema/TemplateInstCallback.h"
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
  #include "llvm/ADT/StringSwitch.h"
-@@ -7275,6 +7276,14 @@ bool Sema::RequireCompleteTypeImpl(SourceLocation Loc, QualType T,
+@@ -7517,6 +7518,14 @@
          diagnoseMissingImport(Loc, SuggestedDef, MissingImportKind::Definition,
                                /*Recover*/TreatAsComplete);
        return !TreatAsComplete;
-+    } else if (Def && TemplateInstCallbacksChain) {
++    } else if (Def && !TemplateInstCallbacks.empty()) {
 +      CodeSynthesisContext TempInst;
 +      TempInst.Kind = CodeSynthesisContext::Memoization;
 +      TempInst.Template = Def;
 +      TempInst.Entity = Def;
 +      TempInst.PointOfInstantiation = Loc;
-+      TemplateInstCallbacksChain->atTemplateBegin(*this, TempInst);
-+      TemplateInstCallbacksChain->atTemplateEnd(*this, TempInst);
++      atTemplateBegin(TemplateInstCallbacks, *this, TempInst);
++      atTemplateEnd(TemplateInstCallbacks, *this, TempInst);
      }
  
      return false;
-diff --git a/test/Sema/templight-deduced-func.cpp b/test/Sema/templight-deduced-func.cpp
-new file mode 100644
-index 0000000000..0aa6c96187
---- /dev/null
-+++ b/test/Sema/templight-deduced-func.cpp
+Index: test/Sema/templight-deduced-func.cpp
+===================================================================
+--- test/Sema/templight-deduced-func.cpp	(nonexistent)
++++ test/Sema/templight-deduced-func.cpp	(working copy)
 @@ -0,0 +1,38 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -656,11 +656,10 @@ index 0000000000..0aa6c96187
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+1]]{{:12'$}}
 +int gvar = foo(0);
-diff --git a/test/Sema/templight-default-arg-inst.cpp b/test/Sema/templight-default-arg-inst.cpp
-new file mode 100644
-index 0000000000..ee8c9225f0
---- /dev/null
-+++ b/test/Sema/templight-default-arg-inst.cpp
+Index: test/Sema/templight-default-arg-inst.cpp
+===================================================================
+--- test/Sema/templight-default-arg-inst.cpp	(nonexistent)
++++ test/Sema/templight-default-arg-inst.cpp	(working copy)
 @@ -0,0 +1,70 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template<class T, class U = T>
@@ -732,11 +731,10 @@ index 0000000000..ee8c9225f0
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+1]]{{:8'$}}
 +A<int> a;
-diff --git a/test/Sema/templight-default-func-arg.cpp b/test/Sema/templight-default-func-arg.cpp
-new file mode 100644
-index 0000000000..c9b5a0e959
---- /dev/null
-+++ b/test/Sema/templight-default-func-arg.cpp
+Index: test/Sema/templight-default-func-arg.cpp
+===================================================================
+--- test/Sema/templight-default-func-arg.cpp	(nonexistent)
++++ test/Sema/templight-default-func-arg.cpp	(working copy)
 @@ -0,0 +1,63 @@
 +// RUN: %clang_cc1 -std=c++14 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T>
@@ -801,11 +799,10 @@ index 0000000000..c9b5a0e959
 +// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+1]]{{:3'$}}
 +  foo<int>();
 +}
-diff --git a/test/Sema/templight-default-template-arg.cpp b/test/Sema/templight-default-template-arg.cpp
-new file mode 100644
-index 0000000000..d9f7afc9ea
---- /dev/null
-+++ b/test/Sema/templight-default-template-arg.cpp
+Index: test/Sema/templight-default-template-arg.cpp
+===================================================================
+--- test/Sema/templight-default-template-arg.cpp	(nonexistent)
++++ test/Sema/templight-default-template-arg.cpp	(working copy)
 @@ -0,0 +1,59 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T = int>
@@ -866,11 +863,10 @@ index 0000000000..d9f7afc9ea
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+1]]{{:5'$}}
 +A<> a;
-diff --git a/test/Sema/templight-exception-spec-func.cpp b/test/Sema/templight-exception-spec-func.cpp
-new file mode 100644
-index 0000000000..e1b756507a
---- /dev/null
-+++ b/test/Sema/templight-exception-spec-func.cpp
+Index: test/Sema/templight-exception-spec-func.cpp
+===================================================================
+--- test/Sema/templight-exception-spec-func.cpp	(nonexistent)
++++ test/Sema/templight-exception-spec-func.cpp	(working copy)
 @@ -0,0 +1,63 @@
 +// RUN: %clang_cc1 -templight-dump -std=c++14 %s 2>&1 | FileCheck %s
 +template <bool B>
@@ -935,11 +931,10 @@ index 0000000000..e1b756507a
 +// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+1]]{{:3'$}}
 +  f<false>();
 +}
-diff --git a/test/Sema/templight-explicit-template-arg.cpp b/test/Sema/templight-explicit-template-arg.cpp
-new file mode 100644
-index 0000000000..050ec51757
---- /dev/null
-+++ b/test/Sema/templight-explicit-template-arg.cpp
+Index: test/Sema/templight-explicit-template-arg.cpp
+===================================================================
+--- test/Sema/templight-explicit-template-arg.cpp	(nonexistent)
++++ test/Sema/templight-explicit-template-arg.cpp	(working copy)
 @@ -0,0 +1,51 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T>
@@ -992,11 +987,10 @@ index 0000000000..050ec51757
 +// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+1]]{{:3'$}}
 +  f<int>();
 +}
-diff --git a/test/Sema/templight-memoization.cpp b/test/Sema/templight-memoization.cpp
-new file mode 100644
-index 0000000000..95957eb509
---- /dev/null
-+++ b/test/Sema/templight-memoization.cpp
+Index: test/Sema/templight-memoization.cpp
+===================================================================
+--- test/Sema/templight-memoization.cpp	(nonexistent)
++++ test/Sema/templight-memoization.cpp	(working copy)
 @@ -0,0 +1,38 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1036,11 +1030,10 @@ index 0000000000..95957eb509
 +// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+1]]{{:10'$}}
 +foo<int> y;
 +
-diff --git a/test/Sema/templight-nested-memoization.cpp b/test/Sema/templight-nested-memoization.cpp
-new file mode 100644
-index 0000000000..92403dfe3f
---- /dev/null
-+++ b/test/Sema/templight-nested-memoization.cpp
+Index: test/Sema/templight-nested-memoization.cpp
+===================================================================
+--- test/Sema/templight-nested-memoization.cpp	(nonexistent)
++++ test/Sema/templight-nested-memoization.cpp	(working copy)
 @@ -0,0 +1,150 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1192,11 +1185,10 @@ index 0000000000..92403dfe3f
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+1]]{{:8'$}}
 +fib<4> x;
 +
-diff --git a/test/Sema/templight-nested-template-instantiation.cpp b/test/Sema/templight-nested-template-instantiation.cpp
-new file mode 100644
-index 0000000000..f63bf222ec
---- /dev/null
-+++ b/test/Sema/templight-nested-template-instantiation.cpp
+Index: test/Sema/templight-nested-template-instantiation.cpp
+===================================================================
+--- test/Sema/templight-nested-template-instantiation.cpp	(nonexistent)
++++ test/Sema/templight-nested-template-instantiation.cpp	(working copy)
 @@ -0,0 +1,72 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1270,11 +1262,10 @@ index 0000000000..f63bf222ec
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+1]]{{:8'$}}
 +foo<2> x;
-diff --git a/test/Sema/templight-one-instantiation.cpp b/test/Sema/templight-one-instantiation.cpp
-new file mode 100644
-index 0000000000..43d817d6fd
---- /dev/null
-+++ b/test/Sema/templight-one-instantiation.cpp
+Index: test/Sema/templight-one-instantiation.cpp
+===================================================================
+--- test/Sema/templight-one-instantiation.cpp	(nonexistent)
++++ test/Sema/templight-one-instantiation.cpp	(working copy)
 @@ -0,0 +1,16 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1292,11 +1283,10 @@ index 0000000000..43d817d6fd
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:}}[[@LINE+1]]{{:10'$}}
 +foo<int> x;
-diff --git a/test/Sema/templight-prior-template-arg.cpp b/test/Sema/templight-prior-template-arg.cpp
-new file mode 100644
-index 0000000000..056cc4785b
---- /dev/null
-+++ b/test/Sema/templight-prior-template-arg.cpp
+Index: test/Sema/templight-prior-template-arg.cpp
+===================================================================
+--- test/Sema/templight-prior-template-arg.cpp	(nonexistent)
++++ test/Sema/templight-prior-template-arg.cpp	(working copy)
 @@ -0,0 +1,62 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template<class T>
@@ -1360,11 +1350,11 @@ index 0000000000..056cc4785b
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+1]]{{:6'$}}
 +B<A> b;
-diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
-index 6e18724a32..625a2da127 100644
---- a/tools/CMakeLists.txt
-+++ b/tools/CMakeLists.txt
-@@ -34,3 +34,4 @@ add_llvm_external_project(clang-tools-extra extra)
+Index: tools/CMakeLists.txt
+===================================================================
+--- tools/CMakeLists.txt	(revision 316272)
++++ tools/CMakeLists.txt	(working copy)
+@@ -35,3 +35,4 @@
  
  # libclang may require clang-tidy in clang-tools-extra.
  add_clang_subdirectory(libclang)

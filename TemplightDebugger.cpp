@@ -60,7 +60,7 @@ struct TemplateDebuggerEntry {
     MemoryUsage(0) { };
   
   TemplateDebuggerEntry(bool aIsBegin, std::size_t aMemUsage,
-                        const Sema &TheSema, 
+                        const Sema &TheSema,
                         const Sema::CodeSynthesisContext& aInst) :
                         IsTemplateBegin(aIsBegin), Inst(aInst), Name(), 
                         FileName(), Line(0), Column(0), MemoryUsage(aMemUsage) { 
@@ -1026,15 +1026,15 @@ public:
 
 
 
-void TemplightDebugger::initializeImpl(const Sema &) {
+void TemplightDebugger::initialize(const Sema &) {
   Interactor->startTrace();
 }
 
-void TemplightDebugger::finalizeImpl(const Sema &) {
+void TemplightDebugger::finalize(const Sema &) {
   Interactor->endTrace();
 }
 
-void TemplightDebugger::atTemplateBeginImpl(const Sema &TheSema, 
+void TemplightDebugger::atTemplateBegin(const Sema &TheSema,
                           const Sema::CodeSynthesisContext& Inst) {
   if ( IgnoreSystemFlag && !Inst.PointOfInstantiation.isInvalid() && 
        TheSema.getSourceManager()
@@ -1047,7 +1047,7 @@ void TemplightDebugger::atTemplateBeginImpl(const Sema &TheSema,
   Interactor->printRawEntry(Entry);
 }
 
-void TemplightDebugger::atTemplateEndImpl(const Sema &TheSema, 
+void TemplightDebugger::atTemplateEnd(const Sema &TheSema,
                           const Sema::CodeSynthesisContext& Inst) {
   if ( IgnoreSystemFlag && !Inst.PointOfInstantiation.isInvalid() && 
        TheSema.getSourceManager()
@@ -1061,7 +1061,7 @@ void TemplightDebugger::atTemplateEndImpl(const Sema &TheSema,
 }
 
 
-TemplightDebugger::TemplightDebugger(const Sema &TheSema, 
+TemplightDebugger::TemplightDebugger(const Sema &TheSema,
                                      bool Memory, bool IgnoreSystem) :
                                      MemoryFlag(Memory),
                                      IgnoreSystemFlag(IgnoreSystem) {

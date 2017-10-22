@@ -216,7 +216,7 @@ public:
 };
 
 
-void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema, 
+void TemplightTracer::atTemplateBegin(const Sema &TheSema,
                           const Sema::CodeSynthesisContext& Inst) {
   if ( !Printer )
     return;
@@ -242,7 +242,7 @@ void TemplightTracer::atTemplateBeginImpl(const Sema &TheSema,
   Printer->printRawEntry(Entry, SafeModeFlag);
 }
 
-void TemplightTracer::atTemplateEndImpl(const Sema &TheSema, 
+void TemplightTracer::atTemplateEnd(const Sema &TheSema,
                           const Sema::CodeSynthesisContext& Inst) {
   if ( !Printer )
     return;
@@ -267,7 +267,7 @@ void TemplightTracer::atTemplateEndImpl(const Sema &TheSema,
   Printer->printRawEntry(Entry, SafeModeFlag);
 }
 
-TemplightTracer::TemplightTracer(const Sema &TheSema, 
+TemplightTracer::TemplightTracer(const Sema &TheSema,
                                  std::string Output, 
                                  bool Memory, bool Safemode, 
                                  bool IgnoreSystem) :
@@ -291,12 +291,12 @@ TemplightTracer::~TemplightTracer() {
   // must be defined here due to TracePrinter being incomplete in header.
 }
 
-void TemplightTracer::initializeImpl(const Sema &) {
+void TemplightTracer::initialize(const Sema &) {
   if ( Printer )
     Printer->startTrace();
 }
 
-void TemplightTracer::finalizeImpl(const Sema &) {
+void TemplightTracer::finalize(const Sema &) {
   if ( Printer )
     Printer->endTrace();
 }

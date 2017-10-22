@@ -10,7 +10,7 @@
 #ifndef LLVM_CLANG_TEMPLIGHT_TRACER_H
 #define LLVM_CLANG_TEMPLIGHT_TRACER_H
 
-#include "clang/Sema/TemplateInstCallbacks.h"
+#include "clang/Sema/TemplateInstCallback.h"
 
 #include <memory>
 #include <string>
@@ -18,17 +18,15 @@
 namespace clang {
 
 
-class TemplightTracer : public TemplateInstantiationCallbacks {
+class TemplightTracer : public TemplateInstantiationCallback {
 public:
   
   class TracePrinter; // forward-decl.
   
-protected:
-  
-  void initializeImpl(const Sema &TheSema) override;
-  void finalizeImpl(const Sema &TheSema) override;
-  void atTemplateBeginImpl(const Sema &TheSema, const Sema::CodeSynthesisContext& Inst) override;
-  void atTemplateEndImpl(const Sema &TheSema, const Sema::CodeSynthesisContext& Inst) override;
+  void initialize(const Sema &TheSema) override;
+  void finalize(const Sema &TheSema) override;
+  void atTemplateBegin(const Sema &TheSema, const Sema::CodeSynthesisContext& Inst) override;
+  void atTemplateEnd(const Sema &TheSema, const Sema::CodeSynthesisContext& Inst) override;
   
 private:
   
