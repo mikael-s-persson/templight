@@ -1,6 +1,6 @@
 Index: include/clang/Driver/CC1Options.td
 ===================================================================
---- include/clang/Driver/CC1Options.td	(revision 316272)
+--- include/clang/Driver/CC1Options.td	(revision 316602)
 +++ include/clang/Driver/CC1Options.td	(working copy)
 @@ -523,6 +523,8 @@
    HelpText<"Build ASTs and then debug dump them">;
@@ -13,7 +13,7 @@ Index: include/clang/Driver/CC1Options.td
  def ast_view : Flag<["-"], "ast-view">,
 Index: include/clang/Frontend/FrontendActions.h
 ===================================================================
---- include/clang/Frontend/FrontendActions.h	(revision 316272)
+--- include/clang/Frontend/FrontendActions.h	(revision 316602)
 +++ include/clang/Frontend/FrontendActions.h	(working copy)
 @@ -162,6 +162,14 @@
    bool hasCodeCompletionSupport() const override { return false; }
@@ -32,7 +32,7 @@ Index: include/clang/Frontend/FrontendActions.h
   *
 Index: include/clang/Frontend/FrontendOptions.h
 ===================================================================
---- include/clang/Frontend/FrontendOptions.h	(revision 316272)
+--- include/clang/Frontend/FrontendOptions.h	(revision 316602)
 +++ include/clang/Frontend/FrontendOptions.h	(working copy)
 @@ -58,6 +58,7 @@
      RewriteObjC,            ///< ObjC->C Rewriter.
@@ -44,7 +44,7 @@ Index: include/clang/Frontend/FrontendOptions.h
    };
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 316272)
+--- include/clang/FrontendTool/Utils.h	(revision 316602)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
 @@ -15,10 +15,19 @@
  #ifndef LLVM_CLANG_FRONTENDTOOL_UTILS_H
@@ -68,7 +68,7 @@ Index: include/clang/FrontendTool/Utils.h
  ///
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 316272)
+--- include/clang/Sema/Sema.h	(revision 316602)
 +++ include/clang/Sema/Sema.h	(working copy)
 @@ -172,6 +172,7 @@
    class TemplateArgumentList;
@@ -205,7 +205,7 @@ Index: include/clang/Sema/TemplateInstCallback.h
 +#endif
 Index: lib/Frontend/CompilerInvocation.cpp
 ===================================================================
---- lib/Frontend/CompilerInvocation.cpp	(revision 316272)
+--- lib/Frontend/CompilerInvocation.cpp	(revision 316602)
 +++ lib/Frontend/CompilerInvocation.cpp	(working copy)
 @@ -1277,6 +1277,8 @@
        Opts.ProgramAction = frontend::PrintPreamble; break;
@@ -226,7 +226,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
  
 Index: lib/Frontend/FrontendActions.cpp
 ===================================================================
---- lib/Frontend/FrontendActions.cpp	(revision 316272)
+--- lib/Frontend/FrontendActions.cpp	(revision 316602)
 +++ lib/Frontend/FrontendActions.cpp	(working copy)
 @@ -18,6 +18,7 @@
  #include "clang/Lex/HeaderSearch.h"
@@ -236,7 +236,7 @@ Index: lib/Frontend/FrontendActions.cpp
  #include "clang/Serialization/ASTReader.h"
  #include "clang/Serialization/ASTWriter.h"
  #include "llvm/Support/FileSystem.h"
-@@ -24,6 +25,8 @@
+@@ -24,11 +25,33 @@
  #include "llvm/Support/MemoryBuffer.h"
  #include "llvm/Support/Path.h"
  #include "llvm/Support/raw_ostream.h"
@@ -245,7 +245,32 @@ Index: lib/Frontend/FrontendActions.cpp
  #include <memory>
  #include <system_error>
  
-@@ -256,6 +259,152 @@
+ using namespace clang;
+ 
++namespace
++{
++  CodeCompleteConsumer* GetCodeCompletionConsumer(CompilerInstance& CI)
++  {
++    return CI.hasCodeCompletionConsumer() ?
++           &CI.getCodeCompletionConsumer() : nullptr;
++  }
++
++  void EnsureSemaIsCreated(CompilerInstance& CI, FrontendAction& Action)
++  {
++    if (Action.hasCodeCompletionSupport() &&
++        !CI.getFrontendOpts().CodeCompletionAt.FileName.empty())
++      CI.createCodeCompletionConsumer();
++
++    if (!CI.hasSema())
++      CI.createSema(Action.getTranslationUnitKind(),
++                    GetCodeCompletionConsumer(CI));
++  }
++}
++
+ //===----------------------------------------------------------------------===//
+ // Custom Actions
+ //===----------------------------------------------------------------------===//
+@@ -256,6 +279,141 @@
  }
  
  namespace {
@@ -373,21 +398,10 @@ Index: lib/Frontend/FrontendActions.cpp
 +  CompilerInstance &CI = getCompilerInstance();
 +
 +  // This part is normally done by ASTFrontEndAction, but needs to happen
-+  //  before Templight observers can be created ----------------------->>
++  // before Templight observers can be created
 +  // FIXME: Move the truncation aspect of this into Sema, we delayed this till
 +  // here so the source manager would be initialized.
-+  if (hasCodeCompletionSupport() &&
-+      !CI.getFrontendOpts().CodeCompletionAt.FileName.empty())
-+    CI.createCodeCompletionConsumer();
-+
-+  // Use a code completion consumer?
-+  CodeCompleteConsumer *CompletionConsumer = nullptr;
-+  if (CI.hasCodeCompletionConsumer())
-+    CompletionConsumer = &CI.getCodeCompletionConsumer();
-+
-+  if (!CI.hasSema())
-+    CI.createSema(getTranslationUnitKind(), CompletionConsumer);
-+  //<<--------------------------------------------------------------
++  EnsureSemaIsCreated(CI, *this);
 +
 +  CI.getSema().TemplateInstCallbacks.push_back(
 +    llvm::make_unique<DefaultTemplateInstCallback>());
@@ -400,7 +414,7 @@ Index: lib/Frontend/FrontendActions.cpp
    class DumpModuleInfoListener : public ASTReaderListener {
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 316272)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 316602)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -32,6 +32,8 @@
  using namespace clang;
@@ -445,7 +459,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 316272)
+--- lib/Parse/ParseAST.cpp	(revision 316602)
 +++ lib/Parse/ParseAST.cpp	(working copy)
 @@ -21,6 +21,7 @@
  #include "clang/Sema/CodeCompleteConsumer.h"
@@ -482,7 +496,7 @@ Index: lib/Parse/ParseAST.cpp
      llvm::errs() << "\nSTATISTICS:\n";
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 316272)
+--- lib/Sema/Sema.cpp	(revision 316602)
 +++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/SemaConsumer.h"
@@ -494,7 +508,7 @@ Index: lib/Sema/Sema.cpp
  using namespace clang;
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 316272)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 316602)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -25,6 +25,7 @@
  #include "clang/Sema/PrettyDeclStackTrace.h"
@@ -565,7 +579,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
      // The inner context was transparent for SFINAE. If it occurred within a
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 316272)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 316602)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
@@ -575,7 +589,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
  using namespace clang;
  
-@@ -3651,8 +3652,10 @@
+@@ -3653,8 +3654,10 @@
        assert(FunTmpl->getTemplatedDecl() == Tmpl &&
               "Deduction from the wrong function template?");
        (void) FunTmpl;
@@ -588,7 +602,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 316272)
+--- lib/Sema/SemaType.cpp	(revision 316602)
 +++ lib/Sema/SemaType.cpp	(working copy)
 @@ -31,6 +31,7 @@
  #include "clang/Sema/ScopeInfo.h"
@@ -598,7 +612,7 @@ Index: lib/Sema/SemaType.cpp
  #include "llvm/ADT/SmallPtrSet.h"
  #include "llvm/ADT/SmallString.h"
  #include "llvm/ADT/StringSwitch.h"
-@@ -7517,6 +7518,14 @@
+@@ -7524,6 +7525,14 @@
          diagnoseMissingImport(Loc, SuggestedDef, MissingImportKind::Definition,
                                /*Recover*/TreatAsComplete);
        return !TreatAsComplete;
@@ -1352,7 +1366,7 @@ Index: test/Sema/templight-prior-template-arg.cpp
 +B<A> b;
 Index: tools/CMakeLists.txt
 ===================================================================
---- tools/CMakeLists.txt	(revision 316272)
+--- tools/CMakeLists.txt	(revision 316602)
 +++ tools/CMakeLists.txt	(working copy)
 @@ -35,3 +35,4 @@
  
