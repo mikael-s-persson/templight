@@ -1,6 +1,6 @@
 Index: include/clang/Driver/CC1Options.td
 ===================================================================
---- include/clang/Driver/CC1Options.td	(revision 316602)
+--- include/clang/Driver/CC1Options.td	(revision 317815)
 +++ include/clang/Driver/CC1Options.td	(working copy)
 @@ -523,6 +523,8 @@
    HelpText<"Build ASTs and then debug dump them">;
@@ -13,7 +13,7 @@ Index: include/clang/Driver/CC1Options.td
  def ast_view : Flag<["-"], "ast-view">,
 Index: include/clang/Frontend/FrontendActions.h
 ===================================================================
---- include/clang/Frontend/FrontendActions.h	(revision 316602)
+--- include/clang/Frontend/FrontendActions.h	(revision 317815)
 +++ include/clang/Frontend/FrontendActions.h	(working copy)
 @@ -162,6 +162,14 @@
    bool hasCodeCompletionSupport() const override { return false; }
@@ -32,7 +32,7 @@ Index: include/clang/Frontend/FrontendActions.h
   *
 Index: include/clang/Frontend/FrontendOptions.h
 ===================================================================
---- include/clang/Frontend/FrontendOptions.h	(revision 316602)
+--- include/clang/Frontend/FrontendOptions.h	(revision 317815)
 +++ include/clang/Frontend/FrontendOptions.h	(working copy)
 @@ -58,6 +58,7 @@
      RewriteObjC,            ///< ObjC->C Rewriter.
@@ -44,7 +44,7 @@ Index: include/clang/Frontend/FrontendOptions.h
    };
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 316602)
+--- include/clang/FrontendTool/Utils.h	(revision 317815)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
 @@ -15,10 +15,19 @@
  #ifndef LLVM_CLANG_FRONTENDTOOL_UTILS_H
@@ -68,7 +68,7 @@ Index: include/clang/FrontendTool/Utils.h
  ///
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 316602)
+--- include/clang/Sema/Sema.h	(revision 317815)
 +++ include/clang/Sema/Sema.h	(working copy)
 @@ -172,6 +172,7 @@
    class TemplateArgumentList;
@@ -78,7 +78,7 @@ Index: include/clang/Sema/Sema.h
    class TemplateParameterList;
    class TemplatePartialOrderingContext;
    class TemplateTemplateParmDecl;
-@@ -7103,6 +7104,12 @@
+@@ -7102,6 +7103,12 @@
        /// We are defining a synthesized function (such as a defaulted special
        /// member).
        DefiningSynthesizedFunction,
@@ -91,7 +91,7 @@ Index: include/clang/Sema/Sema.h
      } Kind;
  
      /// \brief Was the enclosing context a non-instantiation SFINAE context?
-@@ -7211,6 +7218,13 @@
+@@ -7210,6 +7217,13 @@
    // FIXME: Does this belong in Sema? It's tough to implement it anywhere else.
    unsigned LastEmittedCodeSynthesisContextDepth = 0;
  
@@ -205,9 +205,9 @@ Index: include/clang/Sema/TemplateInstCallback.h
 +#endif
 Index: lib/Frontend/CompilerInvocation.cpp
 ===================================================================
---- lib/Frontend/CompilerInvocation.cpp	(revision 316602)
+--- lib/Frontend/CompilerInvocation.cpp	(revision 317815)
 +++ lib/Frontend/CompilerInvocation.cpp	(working copy)
-@@ -1277,6 +1277,8 @@
+@@ -1280,6 +1280,8 @@
        Opts.ProgramAction = frontend::PrintPreamble; break;
      case OPT_E:
        Opts.ProgramAction = frontend::PrintPreprocessedInput; break;
@@ -216,7 +216,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
      case OPT_rewrite_macros:
        Opts.ProgramAction = frontend::RewriteMacros; break;
      case OPT_rewrite_objc:
-@@ -2517,6 +2519,7 @@
+@@ -2521,6 +2523,7 @@
    case frontend::RewriteObjC:
    case frontend::RewriteTest:
    case frontend::RunAnalysis:
@@ -226,7 +226,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
  
 Index: lib/Frontend/FrontendActions.cpp
 ===================================================================
---- lib/Frontend/FrontendActions.cpp	(revision 316602)
+--- lib/Frontend/FrontendActions.cpp	(revision 317815)
 +++ lib/Frontend/FrontendActions.cpp	(working copy)
 @@ -18,6 +18,7 @@
  #include "clang/Lex/HeaderSearch.h"
@@ -414,7 +414,7 @@ Index: lib/Frontend/FrontendActions.cpp
    class DumpModuleInfoListener : public ASTReaderListener {
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 316602)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 317815)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -32,6 +32,8 @@
  using namespace clang;
@@ -459,7 +459,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 316602)
+--- lib/Parse/ParseAST.cpp	(revision 317815)
 +++ lib/Parse/ParseAST.cpp	(working copy)
 @@ -21,6 +21,7 @@
  #include "clang/Sema/CodeCompleteConsumer.h"
@@ -496,7 +496,7 @@ Index: lib/Parse/ParseAST.cpp
      llvm::errs() << "\nSTATISTICS:\n";
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 316602)
+--- lib/Sema/Sema.cpp	(revision 317815)
 +++ lib/Sema/Sema.cpp	(working copy)
 @@ -37,6 +37,7 @@
  #include "clang/Sema/SemaConsumer.h"
@@ -508,7 +508,7 @@ Index: lib/Sema/Sema.cpp
  using namespace clang;
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 316602)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 317815)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -25,6 +25,7 @@
  #include "clang/Sema/PrettyDeclStackTrace.h"
@@ -579,7 +579,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
      // The inner context was transparent for SFINAE. If it occurred within a
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 316602)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 317815)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
 @@ -23,6 +23,7 @@
  #include "clang/Sema/Lookup.h"
@@ -602,7 +602,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 316602)
+--- lib/Sema/SemaType.cpp	(revision 317815)
 +++ lib/Sema/SemaType.cpp	(working copy)
 @@ -31,6 +31,7 @@
  #include "clang/Sema/ScopeInfo.h"
@@ -627,10 +627,10 @@ Index: lib/Sema/SemaType.cpp
      }
  
      return false;
-Index: test/Sema/templight-deduced-func.cpp
+Index: test/Templight/templight-deduced-func.cpp
 ===================================================================
---- test/Sema/templight-deduced-func.cpp	(nonexistent)
-+++ test/Sema/templight-deduced-func.cpp	(working copy)
+--- test/Templight/templight-deduced-func.cpp	(nonexistent)
++++ test/Templight/templight-deduced-func.cpp	(working copy)
 @@ -0,0 +1,38 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -670,10 +670,10 @@ Index: test/Sema/templight-deduced-func.cpp
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+1]]{{:12'$}}
 +int gvar = foo(0);
-Index: test/Sema/templight-default-arg-inst.cpp
+Index: test/Templight/templight-default-arg-inst.cpp
 ===================================================================
---- test/Sema/templight-default-arg-inst.cpp	(nonexistent)
-+++ test/Sema/templight-default-arg-inst.cpp	(working copy)
+--- test/Templight/templight-default-arg-inst.cpp	(nonexistent)
++++ test/Templight/templight-default-arg-inst.cpp	(working copy)
 @@ -0,0 +1,70 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template<class T, class U = T>
@@ -745,10 +745,10 @@ Index: test/Sema/templight-default-arg-inst.cpp
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+1]]{{:8'$}}
 +A<int> a;
-Index: test/Sema/templight-default-func-arg.cpp
+Index: test/Templight/templight-default-func-arg.cpp
 ===================================================================
---- test/Sema/templight-default-func-arg.cpp	(nonexistent)
-+++ test/Sema/templight-default-func-arg.cpp	(working copy)
+--- test/Templight/templight-default-func-arg.cpp	(nonexistent)
++++ test/Templight/templight-default-func-arg.cpp	(working copy)
 @@ -0,0 +1,63 @@
 +// RUN: %clang_cc1 -std=c++14 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T>
@@ -813,10 +813,10 @@ Index: test/Sema/templight-default-func-arg.cpp
 +// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+1]]{{:3'$}}
 +  foo<int>();
 +}
-Index: test/Sema/templight-default-template-arg.cpp
+Index: test/Templight/templight-default-template-arg.cpp
 ===================================================================
---- test/Sema/templight-default-template-arg.cpp	(nonexistent)
-+++ test/Sema/templight-default-template-arg.cpp	(working copy)
+--- test/Templight/templight-default-template-arg.cpp	(nonexistent)
++++ test/Templight/templight-default-template-arg.cpp	(working copy)
 @@ -0,0 +1,59 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T = int>
@@ -877,10 +877,10 @@ Index: test/Sema/templight-default-template-arg.cpp
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+1]]{{:5'$}}
 +A<> a;
-Index: test/Sema/templight-exception-spec-func.cpp
+Index: test/Templight/templight-exception-spec-func.cpp
 ===================================================================
---- test/Sema/templight-exception-spec-func.cpp	(nonexistent)
-+++ test/Sema/templight-exception-spec-func.cpp	(working copy)
+--- test/Templight/templight-exception-spec-func.cpp	(nonexistent)
++++ test/Templight/templight-exception-spec-func.cpp	(working copy)
 @@ -0,0 +1,63 @@
 +// RUN: %clang_cc1 -templight-dump -std=c++14 %s 2>&1 | FileCheck %s
 +template <bool B>
@@ -945,10 +945,10 @@ Index: test/Sema/templight-exception-spec-func.cpp
 +// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+1]]{{:3'$}}
 +  f<false>();
 +}
-Index: test/Sema/templight-explicit-template-arg.cpp
+Index: test/Templight/templight-explicit-template-arg.cpp
 ===================================================================
---- test/Sema/templight-explicit-template-arg.cpp	(nonexistent)
-+++ test/Sema/templight-explicit-template-arg.cpp	(working copy)
+--- test/Templight/templight-explicit-template-arg.cpp	(nonexistent)
++++ test/Templight/templight-explicit-template-arg.cpp	(working copy)
 @@ -0,0 +1,51 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T>
@@ -1001,10 +1001,10 @@ Index: test/Sema/templight-explicit-template-arg.cpp
 +// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+1]]{{:3'$}}
 +  f<int>();
 +}
-Index: test/Sema/templight-memoization.cpp
+Index: test/Templight/templight-memoization.cpp
 ===================================================================
---- test/Sema/templight-memoization.cpp	(nonexistent)
-+++ test/Sema/templight-memoization.cpp	(working copy)
+--- test/Templight/templight-memoization.cpp	(nonexistent)
++++ test/Templight/templight-memoization.cpp	(working copy)
 @@ -0,0 +1,38 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1044,10 +1044,10 @@ Index: test/Sema/templight-memoization.cpp
 +// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+1]]{{:10'$}}
 +foo<int> y;
 +
-Index: test/Sema/templight-nested-memoization.cpp
+Index: test/Templight/templight-nested-memoization.cpp
 ===================================================================
---- test/Sema/templight-nested-memoization.cpp	(nonexistent)
-+++ test/Sema/templight-nested-memoization.cpp	(working copy)
+--- test/Templight/templight-nested-memoization.cpp	(nonexistent)
++++ test/Templight/templight-nested-memoization.cpp	(working copy)
 @@ -0,0 +1,150 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1199,10 +1199,10 @@ Index: test/Sema/templight-nested-memoization.cpp
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+1]]{{:8'$}}
 +fib<4> x;
 +
-Index: test/Sema/templight-nested-template-instantiation.cpp
+Index: test/Templight/templight-nested-template-instantiation.cpp
 ===================================================================
---- test/Sema/templight-nested-template-instantiation.cpp	(nonexistent)
-+++ test/Sema/templight-nested-template-instantiation.cpp	(working copy)
+--- test/Templight/templight-nested-template-instantiation.cpp	(nonexistent)
++++ test/Templight/templight-nested-template-instantiation.cpp	(working copy)
 @@ -0,0 +1,72 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1276,10 +1276,10 @@ Index: test/Sema/templight-nested-template-instantiation.cpp
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+1]]{{:8'$}}
 +foo<2> x;
-Index: test/Sema/templight-one-instantiation.cpp
+Index: test/Templight/templight-one-instantiation.cpp
 ===================================================================
---- test/Sema/templight-one-instantiation.cpp	(nonexistent)
-+++ test/Sema/templight-one-instantiation.cpp	(working copy)
+--- test/Templight/templight-one-instantiation.cpp	(nonexistent)
++++ test/Templight/templight-one-instantiation.cpp	(working copy)
 @@ -0,0 +1,16 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
@@ -1297,10 +1297,10 @@ Index: test/Sema/templight-one-instantiation.cpp
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:}}[[@LINE+1]]{{:10'$}}
 +foo<int> x;
-Index: test/Sema/templight-prior-template-arg.cpp
+Index: test/Templight/templight-prior-template-arg.cpp
 ===================================================================
---- test/Sema/templight-prior-template-arg.cpp	(nonexistent)
-+++ test/Sema/templight-prior-template-arg.cpp	(working copy)
+--- test/Templight/templight-prior-template-arg.cpp	(nonexistent)
++++ test/Templight/templight-prior-template-arg.cpp	(working copy)
 @@ -0,0 +1,62 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template<class T>
@@ -1364,12 +1364,3 @@ Index: test/Sema/templight-prior-template-arg.cpp
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+1]]{{:6'$}}
 +B<A> b;
-Index: tools/CMakeLists.txt
-===================================================================
---- tools/CMakeLists.txt	(revision 316602)
-+++ tools/CMakeLists.txt	(working copy)
-@@ -35,3 +35,4 @@
- 
- # libclang may require clang-tidy in clang-tools-extra.
- add_clang_subdirectory(libclang)
-+add_subdirectory(templight)
