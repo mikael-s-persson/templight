@@ -13,7 +13,7 @@
 
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Sema/Sema.h>
-#include <clang/Sema/TemplateInstCallbacks.h>
+#include <clang/Sema/TemplateInstCallback.h>
 
 #include <llvm/ADT/Twine.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -99,20 +99,18 @@ void TemplightAction::ExecuteAction() {
   if ( InstProfiler ) {
     EnsureHasSema(CI);
 
-    TemplightTracer* p_t = new TemplightTracer(CI.getSema(), OutputFilename,
-      MemoryProfile, OutputInSafeMode, IgnoreSystemInst);
+    std::unique_ptr<TemplightTracer> p_t(new TemplightTracer(CI.getSema(), OutputFilename,
+      MemoryProfile, OutputInSafeMode, IgnoreSystemInst));
     p_t->readBlacklists(BlackListFilename);
-    TemplateInstantiationCallbacks::appendNewCallbacks(
-      CI.getSema().TemplateInstCallbacksChain, p_t);
+    CI.getSema().TemplateInstCallbacks.push_back(std::move(p_t));
   }
   if ( InteractiveDebug ) {
     EnsureHasSema(CI);
 
-    TemplightDebugger* p_t = new TemplightDebugger(CI.getSema(),
-      MemoryProfile, IgnoreSystemInst);
+    std::unique_ptr<TemplightDebugger> p_t(new TemplightDebugger(CI.getSema(),
+      MemoryProfile, IgnoreSystemInst));
     p_t->readBlacklists(BlackListFilename);
-    TemplateInstantiationCallbacks::appendNewCallbacks(
-      CI.getSema().TemplateInstCallbacksChain, p_t);
+    CI.getSema().TemplateInstCallbacks.push_back(std::move(p_t));
   }
 
   WrapperFrontendAction::ExecuteAction();
