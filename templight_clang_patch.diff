@@ -1,8 +1,8 @@
 Index: include/clang/Driver/CC1Options.td
 ===================================================================
---- include/clang/Driver/CC1Options.td	(revision 319617)
+--- include/clang/Driver/CC1Options.td	(revision 324194)
 +++ include/clang/Driver/CC1Options.td	(working copy)
-@@ -1,833 +1,835 @@
+@@ -1,841 +1,843 @@
  //===--- CC1Options.td - Options for clang -cc1 ---------------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -268,6 +268,8 @@ Index: include/clang/Driver/CC1Options.td
  def menable_unsafe_fp_math : Flag<["-"], "menable-unsafe-fp-math">,
    HelpText<"Allow unsafe floating-point math optimizations which may decrease "
             "precision">;
+ def mreassociate : Flag<["-"], "mreassociate">,
+   HelpText<"Allow reassociation transformations for floating-point instructions">;
  def mfloat_abi : Separate<["-"], "mfloat-abi">,
    HelpText<"The float ABI to use">;
  def mtp : Separate<["-"], "mtp">,
@@ -405,8 +407,12 @@ Index: include/clang/Driver/CC1Options.td
    HelpText<"Set the maximum number of source lines to show in a caret diagnostic">;
  def fmessage_length : Separate<["-"], "fmessage-length">, MetaVarName<"<N>">,
    HelpText<"Format message diagnostics so that they fit within N columns or fewer, when possible.">;
+ def verify_EQ : CommaJoined<["-"], "verify=">,
+   MetaVarName<"<prefixes>">,
+   HelpText<"Verify diagnostic output using comment directives that start with"
+            " prefixes in the comma-separated sequence <prefixes>">;
  def verify : Flag<["-"], "verify">,
-   HelpText<"Verify diagnostic output using comment directives">;
+   HelpText<"Equivalent to -verify=expected">;
  def verify_ignore_unexpected : Flag<["-"], "verify-ignore-unexpected">,
    HelpText<"Ignore unexpected diagnostic messages">;
  def verify_ignore_unexpected_EQ : CommaJoined<["-"], "verify-ignore-unexpected=">,
@@ -442,6 +448,8 @@ Index: include/clang/Driver/CC1Options.td
    HelpText<"Include code patterns in code-completion results">;
  def no_code_completion_globals : Flag<["-"], "no-code-completion-globals">,
    HelpText<"Do not include global declarations in code-completion results.">;
+ def no_code_completion_ns_level_decls : Flag<["-"], "no-code-completion-ns-level-decls">,
+   HelpText<"Do not include declarations inside namespaces (incl. global namespace) in the code-completion results.">;
  def code_completion_brief_comments : Flag<["-"], "code-completion-brief-comments">,
    HelpText<"Include brief documentation comments in code-completion results.">;
  def disable_free : Flag<["-"], "disable-free">,
@@ -840,7 +848,7 @@ Index: include/clang/Driver/CC1Options.td
  } // let Flags = [CC1AsOption]
 Index: include/clang/Frontend/FrontendActions.h
 ===================================================================
---- include/clang/Frontend/FrontendActions.h	(revision 319617)
+--- include/clang/Frontend/FrontendActions.h	(revision 324194)
 +++ include/clang/Frontend/FrontendActions.h	(working copy)
 @@ -1,250 +1,258 @@
  //===-- FrontendActions.h - Useful Frontend Actions -------------*- C++ -*-===//
@@ -1103,7 +1111,7 @@ Index: include/clang/Frontend/FrontendActions.h
  #endif
 Index: include/clang/Frontend/FrontendOptions.h
 ===================================================================
---- include/clang/Frontend/FrontendOptions.h	(revision 319617)
+--- include/clang/Frontend/FrontendOptions.h	(revision 324194)
 +++ include/clang/Frontend/FrontendOptions.h	(working copy)
 @@ -1,353 +1,354 @@
  //===--- FrontendOptions.h --------------------------------------*- C++ -*-===//
@@ -1462,7 +1470,7 @@ Index: include/clang/Frontend/FrontendOptions.h
  #endif
 Index: include/clang/FrontendTool/Utils.h
 ===================================================================
---- include/clang/FrontendTool/Utils.h	(revision 319617)
+--- include/clang/FrontendTool/Utils.h	(revision 324194)
 +++ include/clang/FrontendTool/Utils.h	(working copy)
 @@ -1,30 +1,39 @@
  //===--- Utils.h - Misc utilities for the front-end -------------*- C++ -*-===//
@@ -1506,9 +1514,9 @@ Index: include/clang/FrontendTool/Utils.h
  #endif
 Index: include/clang/Sema/Sema.h
 ===================================================================
---- include/clang/Sema/Sema.h	(revision 319617)
+--- include/clang/Sema/Sema.h	(revision 324194)
 +++ include/clang/Sema/Sema.h	(working copy)
-@@ -1,10721 +1,10736 @@
+@@ -1,10739 +1,10754 @@
  //===--- Sema.h - Semantic Analysis & AST Building --------------*- C++ -*-===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -2851,7 +2859,7 @@ Index: include/clang/Sema/Sema.h
        getCurFunction()->recordUseOfWeak(E, IsRead);
    }
  
-   void PushCompoundScope();
+   void PushCompoundScope(bool IsStmtExpr);
    void PopCompoundScope();
  
    sema::CompoundScopeInfo &getCurCompoundScope() const;
@@ -2971,6 +2979,7 @@ Index: include/clang/Sema/Sema.h
        const PartialDiagnostic &DiagID, const PartialDiagnostic & NoteID,
        const FunctionProtoType *Old, SourceLocation OldLoc,
        const FunctionProtoType *New, SourceLocation NewLoc);
+   bool handlerCanCatch(QualType HandlerType, QualType ExceptionType);
    bool CheckExceptionSpecSubset(const PartialDiagnostic &DiagID,
                                  const PartialDiagnostic &NestedDiagID,
                                  const PartialDiagnostic &NoteID,
@@ -4711,11 +4720,13 @@ Index: include/clang/Sema/Sema.h
  
    void LookupVisibleDecls(Scope *S, LookupNameKind Kind,
                            VisibleDeclConsumer &Consumer,
-                           bool IncludeGlobalScope = true);
+                           bool IncludeGlobalScope = true,
+                           bool LoadExternal = true);
    void LookupVisibleDecls(DeclContext *Ctx, LookupNameKind Kind,
                            VisibleDeclConsumer &Consumer,
                            bool IncludeGlobalScope = true,
-                           bool IncludeDependentBases = false);
+                           bool IncludeDependentBases = false,
+                           bool LoadExternal = true);
  
    enum CorrectTypoKind {
      CTK_NonError,     // CorrectTypo used in a non error recovery situation.
@@ -5176,7 +5187,7 @@ Index: include/clang/Sema/Sema.h
    StmtResult ActOnNullStmt(SourceLocation SemiLoc,
                             bool HasLeadingEmptyMacro = false);
  
-   void ActOnStartOfCompoundStmt();
+   void ActOnStartOfCompoundStmt(bool IsStmtExpr);
    void ActOnFinishOfCompoundStmt();
    StmtResult ActOnCompoundStmt(SourceLocation L, SourceLocation R,
                                 ArrayRef<Stmt *> Elts, bool isStmtExpr);
@@ -5184,8 +5195,8 @@ Index: include/clang/Sema/Sema.h
    /// \brief A RAII object to enter scope of a compound statement.
    class CompoundScopeRAII {
    public:
-     CompoundScopeRAII(Sema &S): S(S) {
-       S.ActOnStartOfCompoundStmt();
+     CompoundScopeRAII(Sema &S, bool IsStmtExpr = false) : S(S) {
+       S.ActOnStartOfCompoundStmt(IsStmtExpr);
      }
  
      ~CompoundScopeRAII() {
@@ -6615,14 +6626,16 @@ Index: include/clang/Sema/Sema.h
    /// or class type construction ("ClassType(x,y,z)")
    /// or creation of a value-initialized type ("int()").
    ExprResult ActOnCXXTypeConstructExpr(ParsedType TypeRep,
-                                        SourceLocation LParenLoc,
+                                        SourceLocation LParenOrBraceLoc,
                                         MultiExprArg Exprs,
-                                        SourceLocation RParenLoc);
+                                        SourceLocation RParenOrBraceLoc,
+                                        bool ListInitialization);
  
    ExprResult BuildCXXTypeConstructExpr(TypeSourceInfo *Type,
                                         SourceLocation LParenLoc,
                                         MultiExprArg Exprs,
-                                        SourceLocation RParenLoc);
+                                        SourceLocation RParenLoc,
+                                        bool ListInitialization);
  
    /// ActOnCXXNew - Parsed a C++ 'new' expression.
    ExprResult ActOnCXXNew(SourceLocation StartLoc, bool UseGlobal,
@@ -7058,6 +7071,11 @@ Index: include/clang/Sema/Sema.h
    /// lambda body.
    ExprResult BuildLambdaExpr(SourceLocation StartLoc, SourceLocation EndLoc,
                               sema::LambdaScopeInfo *LSI);
+ 
+   /// Get the return type to use for a lambda's conversion function(s) to
+   /// function pointer type, given the type of the call operator.
+   QualType
+   getLambdaConversionFunctionResultType(const FunctionProtoType *CallOpType);
  
    /// \brief Define the "body" of the conversion from a lambda object to a
    /// function pointer.
@@ -7576,7 +7594,7 @@ Index: include/clang/Sema/Sema.h
    void DiagnoseTemplateParameterShadow(SourceLocation Loc, Decl *PrevDecl);
    TemplateDecl *AdjustDeclIfTemplate(Decl *&Decl);
  
-   Decl *ActOnTypeParameter(Scope *S, bool Typename,
+   NamedDecl *ActOnTypeParameter(Scope *S, bool Typename,
                             SourceLocation EllipsisLoc,
                             SourceLocation KeyLoc,
                             IdentifierInfo *ParamName,
@@ -7589,12 +7607,12 @@ Index: include/clang/Sema/Sema.h
                                               SourceLocation Loc);
    QualType CheckNonTypeTemplateParameterType(QualType T, SourceLocation Loc);
  
-   Decl *ActOnNonTypeTemplateParameter(Scope *S, Declarator &D,
+   NamedDecl *ActOnNonTypeTemplateParameter(Scope *S, Declarator &D,
                                        unsigned Depth,
                                        unsigned Position,
                                        SourceLocation EqualLoc,
                                        Expr *DefaultArg);
-   Decl *ActOnTemplateTemplateParameter(Scope *S,
+   NamedDecl *ActOnTemplateTemplateParameter(Scope *S,
                                         SourceLocation TmpLoc,
                                         TemplateParameterList *Params,
                                         SourceLocation EllipsisLoc,
@@ -9286,6 +9304,9 @@ Index: include/clang/Sema/Sema.h
  
    void InstantiateExceptionSpec(SourceLocation PointOfInstantiation,
                                  FunctionDecl *Function);
+   FunctionDecl *InstantiateFunctionDeclaration(FunctionTemplateDecl *FTD,
+                                                const TemplateArgumentList *Args,
+                                                SourceLocation Loc);
    void InstantiateFunctionDefinition(SourceLocation PointOfInstantiation,
                                       FunctionDecl *Function,
                                       bool Recursive = false,
@@ -9316,11 +9337,6 @@ Index: include/clang/Sema/Sema.h
                                       VarDecl *Var, bool Recursive = false,
                                       bool DefinitionRequired = false,
                                       bool AtEndOfTU = false);
-   void InstantiateStaticDataMemberDefinition(
-                                      SourceLocation PointOfInstantiation,
-                                      VarDecl *Var,
-                                      bool Recursive = false,
-                                      bool DefinitionRequired = false);
  
    void InstantiateMemInitializers(CXXConstructorDecl *New,
                                    const CXXConstructorDecl *Tmpl,
@@ -9996,6 +10012,7 @@ Index: include/clang/Sema/Sema.h
    StmtResult BuildCoreturnStmt(SourceLocation KwLoc, Expr *E,
                                 bool IsImplicit = false);
    StmtResult BuildCoroutineBodyStmt(CoroutineBodyStmt::CtorArgs);
+   bool buildCoroutineParameterMoves(SourceLocation Loc);
    VarDecl *buildCoroutinePromise(SourceLocation Loc);
    void CheckCompletedCoroutineBody(FunctionDecl *FD, Stmt *&Body);
  
@@ -10066,6 +10083,10 @@ Index: include/clang/Sema/Sema.h
                                          bool StrictlyPositive = true);
    /// Returns OpenMP nesting level for current directive.
    unsigned getOpenMPNestingLevel() const;
+ 
+   /// Adjusts the function scopes index for the target-based regions.
+   void adjustOpenMPTargetScopeIndex(unsigned &FunctionScopesIndex,
+                                     unsigned Level) const;
  
    /// Push new OpenMP function region for non-capturing function.
    void pushOpenMPFunctionRegion();
@@ -10183,7 +10204,8 @@ Index: include/clang/Sema/Sema.h
                                      OMPDeclareTargetDeclAttr::MapTypeTy MT,
                                      NamedDeclSetType &SameDirectiveDecls);
    /// Check declaration inside target region.
-   void checkDeclIsAllowedInOpenMPTarget(Expr *E, Decl *D);
+   void checkDeclIsAllowedInOpenMPTarget(Expr *E, Decl *D,
+                                         SourceLocation IdLoc = SourceLocation());
    /// Return true inside OpenMP declare target region.
    bool isInOpenMPDeclareTargetContext() const {
      return IsInOpenMPDeclareTargetContext;
@@ -11098,7 +11120,8 @@ Index: include/clang/Sema/Sema.h
                                 bool AllowBothBool, bool AllowBoolConversion);
    QualType GetSignedVectorType(QualType V);
    QualType CheckVectorCompareOperands(ExprResult &LHS, ExprResult &RHS,
-                                       SourceLocation Loc, bool isRelational);
+                                       SourceLocation Loc,
+                                       BinaryOperatorKind Opc);
    QualType CheckVectorLogicalOperands(ExprResult &LHS, ExprResult &RHS,
                                        SourceLocation Loc);
  
@@ -11922,7 +11945,10 @@ Index: include/clang/Sema/Sema.h
                            const AttrVec *Attrs = nullptr,
                            const FunctionDecl *FD = nullptr);
  
-   void CheckFloatComparison(SourceLocation Loc, Expr* LHS, Expr* RHS);
+ public:
+   void CheckFloatComparison(SourceLocation Loc, Expr *LHS, Expr *RHS);
+ 
+ private:
    void CheckImplicitConversions(Expr *E, SourceLocation CC = SourceLocation());
    void CheckBoolLikeConversion(Expr *E, SourceLocation CC);
    void CheckForIntOverflow(Expr *E);
@@ -12335,9 +12361,9 @@ Index: include/clang/Sema/TemplateInstCallback.h
 +#endif
 Index: lib/Frontend/CompilerInvocation.cpp
 ===================================================================
---- lib/Frontend/CompilerInvocation.cpp	(revision 319617)
+--- lib/Frontend/CompilerInvocation.cpp	(revision 324194)
 +++ lib/Frontend/CompilerInvocation.cpp	(working copy)
-@@ -1,2968 +1,2971 @@
+@@ -1,3042 +1,3045 @@
  //===--- CompilerInvocation.cpp -------------------------------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -12645,6 +12671,14 @@ Index: lib/Frontend/CompilerInvocation.cpp
      }
    }
  
+   llvm::raw_string_ostream os(Opts.FullCompilerInvocation);
+   for (unsigned i=0; i<Args.getNumInputArgStrings(); i++) {
+     if (i != 0)
+       os << " ";
+     os << Args.getArgString(i);
+   }
+   os.flush();
+ 
    return Success;
  }
  
@@ -12670,15 +12704,23 @@ Index: lib/Frontend/CompilerInvocation.cpp
    return "default";
  }
  
- static StringRef getRelocModel(ArgList &Args, DiagnosticsEngine &Diags) {
+ static llvm::Reloc::Model getRelocModel(ArgList &Args,
+                                         DiagnosticsEngine &Diags) {
    if (Arg *A = Args.getLastArg(OPT_mrelocation_model)) {
      StringRef Value = A->getValue();
-     if (Value == "static" || Value == "pic" || Value == "ropi" ||
-         Value == "rwpi" || Value == "ropi-rwpi" || Value == "dynamic-no-pic")
-       return Value;
+     auto RM = llvm::StringSwitch<llvm::Optional<llvm::Reloc::Model>>(Value)
+                   .Case("static", llvm::Reloc::Static)
+                   .Case("pic", llvm::Reloc::PIC_)
+                   .Case("ropi", llvm::Reloc::ROPI)
+                   .Case("rwpi", llvm::Reloc::RWPI)
+                   .Case("ropi-rwpi", llvm::Reloc::ROPI_RWPI)
+                   .Case("dynamic-no-pic", llvm::Reloc::DynamicNoPIC)
+                   .Default(None);
+     if (RM.hasValue())
+       return *RM;
      Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << Value;
    }
-   return "pic";
+   return llvm::Reloc::PIC_;
  }
  
  /// \brief Create a new Regex instance out of the string value in \p RpassArg.
@@ -12979,6 +13021,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
                          Args.hasArg(OPT_cl_no_signed_zeros) ||
                          Args.hasArg(OPT_cl_unsafe_math_optimizations) ||
                          Args.hasArg(OPT_cl_fast_relaxed_math));
+   Opts.Reassociate = Args.hasArg(OPT_mreassociate);
    Opts.FlushDenorm = Args.hasArg(OPT_cl_denorms_are_zero);
    Opts.CorrectlyRoundedDivSqrt =
        Args.hasArg(OPT_cl_fp32_correctly_rounded_divide_sqrt);
@@ -13021,6 +13064,8 @@ Index: lib/Frontend/CompilerInvocation.cpp
                                         OPT_fno_function_sections, false);
    Opts.DataSections = Args.hasFlag(OPT_fdata_sections,
                                     OPT_fno_data_sections, false);
+   Opts.StackSizeSection =
+       Args.hasFlag(OPT_fstack_size_section, OPT_fno_stack_size_section, false);
    Opts.UniqueSectionNames = Args.hasFlag(OPT_funique_section_names,
                                           OPT_fno_unique_section_names, true);
  
@@ -13053,8 +13098,12 @@ Index: lib/Frontend/CompilerInvocation.cpp
    Opts.VectorizeLoop = Args.hasArg(OPT_vectorize_loops);
    Opts.VectorizeSLP = Args.hasArg(OPT_vectorize_slp);
  
+   Opts.PreferVectorWidth = Args.getLastArgValue(OPT_mprefer_vector_width_EQ);
+ 
    Opts.MainFileName = Args.getLastArgValue(OPT_main_file_name);
    Opts.VerifyModule = !Args.hasArg(OPT_disable_llvm_verifier);
+ 
+   Opts.ControlFlowGuard = Args.hasArg(OPT_cfguard);
  
    Opts.DisableGCov = Args.hasArg(OPT_test_coverage);
    Opts.EmitGcovArcs = Args.hasArg(OPT_femit_coverage_data);
@@ -13132,6 +13181,21 @@ Index: lib/Frontend/CompilerInvocation.cpp
    Opts.InstrumentForProfiling = Args.hasArg(OPT_pg);
    Opts.CallFEntry = Args.hasArg(OPT_mfentry);
    Opts.EmitOpenCLArgMetadata = Args.hasArg(OPT_cl_kernel_arg_info);
+ 
+   if (const Arg *A = Args.getLastArg(OPT_fcf_protection_EQ)) {
+     StringRef Name = A->getValue();
+     if (Name == "full") {
+       Opts.CFProtectionReturn = 1;
+       Opts.CFProtectionBranch = 1;
+     } else if (Name == "return")
+       Opts.CFProtectionReturn = 1;
+     else if (Name == "branch")
+       Opts.CFProtectionBranch = 1;
+     else if (Name != "none") {
+       Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << Name;
+       Success = false;
+     }
+   }
  
    if (const Arg *A = Args.getLastArg(OPT_compress_debug_sections,
                                       OPT_compress_debug_sections_EQ)) {
@@ -13409,6 +13473,26 @@ Index: lib/Frontend/CompilerInvocation.cpp
            llvm::sys::Process::StandardErrHasColors());
  }
  
+ static bool checkVerifyPrefixes(const std::vector<std::string> &VerifyPrefixes,
+                                 DiagnosticsEngine *Diags) {
+   bool Success = true;
+   for (const auto &Prefix : VerifyPrefixes) {
+     // Every prefix must start with a letter and contain only alphanumeric
+     // characters, hyphens, and underscores.
+     auto BadChar = std::find_if(Prefix.begin(), Prefix.end(),
+                                 [](char C){return !isAlphanumeric(C)
+                                                   && C != '-' && C != '_';});
+     if (BadChar != Prefix.end() || !isLetter(Prefix[0])) {
+       Success = false;
+       if (Diags) {
+         Diags->Report(diag::err_drv_invalid_value) << "-verify=" << Prefix;
+         Diags->Report(diag::note_drv_verify_prefix_spelling);
+       }
+     }
+   }
+   return Success;
+ }
+ 
  bool clang::ParseDiagnosticArgs(DiagnosticOptions &Opts, ArgList &Args,
                                  DiagnosticsEngine *Diags,
                                  bool DefaultDiagColor, bool DefaultShowOpt) {
@@ -13496,7 +13580,18 @@ Index: lib/Frontend/CompilerInvocation.cpp
    Opts.ShowSourceRanges = Args.hasArg(OPT_fdiagnostics_print_source_range_info);
    Opts.ShowParseableFixits = Args.hasArg(OPT_fdiagnostics_parseable_fixits);
    Opts.ShowPresumedLoc = !Args.hasArg(OPT_fno_diagnostics_use_presumed_location);
-   Opts.VerifyDiagnostics = Args.hasArg(OPT_verify);
+   Opts.VerifyDiagnostics = Args.hasArg(OPT_verify) || Args.hasArg(OPT_verify_EQ);
+   Opts.VerifyPrefixes = Args.getAllArgValues(OPT_verify_EQ);
+   if (Args.hasArg(OPT_verify))
+     Opts.VerifyPrefixes.push_back("expected");
+   // Keep VerifyPrefixes in its original order for the sake of diagnostics, and
+   // then sort it to prepare for fast lookup using std::binary_search.
+   if (!checkVerifyPrefixes(Opts.VerifyPrefixes, Diags)) {
+     Opts.VerifyDiagnostics = false;
+     Success = false;
+   }
+   else
+     std::sort(Opts.VerifyPrefixes.begin(), Opts.VerifyPrefixes.end());
    DiagnosticLevelMask DiagMask = DiagnosticLevelMask::None;
    Success &= parseDiagnosticLevelMask("-verify-ignore-unexpected=",
      Args.getAllArgValues(OPT_verify_ignore_unexpected_EQ),
@@ -13720,6 +13815,8 @@ Index: lib/Frontend/CompilerInvocation.cpp
      = Args.hasArg(OPT_code_completion_patterns);
    Opts.CodeCompleteOpts.IncludeGlobals
      = !Args.hasArg(OPT_no_code_completion_globals);
+   Opts.CodeCompleteOpts.IncludeNamespaceLevelDecls
+     = !Args.hasArg(OPT_no_code_completion_ns_level_decls);
    Opts.CodeCompleteOpts.IncludeBriefComments
      = Args.hasArg(OPT_code_completion_brief_comments);
  
@@ -14071,11 +14168,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
        break;
      case InputKind::CXX:
      case InputKind::ObjCXX:
-       // The PS4 uses C++11 as the default C++ standard.
-       if (T.isPS4())
-         LangStd = LangStandard::lang_gnucxx11;
-       else
-         LangStd = LangStandard::lang_gnucxx98;
+       LangStd = LangStandard::lang_gnucxx14;
        break;
      case InputKind::RenderScript:
        LangStd = LangStandard::lang_c99;
@@ -14087,10 +14180,11 @@ Index: lib/Frontend/CompilerInvocation.cpp
    Opts.LineComment = Std.hasLineComments();
    Opts.C99 = Std.isC99();
    Opts.C11 = Std.isC11();
+   Opts.C17 = Std.isC17();
    Opts.CPlusPlus = Std.isCPlusPlus();
    Opts.CPlusPlus11 = Std.isCPlusPlus11();
    Opts.CPlusPlus14 = Std.isCPlusPlus14();
-   Opts.CPlusPlus1z = Std.isCPlusPlus1z();
+   Opts.CPlusPlus17 = Std.isCPlusPlus17();
    Opts.CPlusPlus2a = Std.isCPlusPlus2a();
    Opts.Digraphs = Std.hasDigraphs();
    Opts.GNUMode = Std.isGNUMode();
@@ -14146,7 +14240,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
    Opts.GNUKeywords = Opts.GNUMode;
    Opts.CXXOperatorNames = Opts.CPlusPlus;
  
-   Opts.AlignedAllocation = Opts.CPlusPlus1z;
+   Opts.AlignedAllocation = Opts.CPlusPlus17;
  
    Opts.DollarIdents = !Opts.AsmPreprocessor;
  }
@@ -14465,7 +14559,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
    // Mimicing gcc's behavior, trigraphs are only enabled if -trigraphs
    // is specified, or -std is set to a conforming mode.
    // Trigraphs are disabled by default in c++1z onwards.
-   Opts.Trigraphs = !Opts.GNUMode && !Opts.MSVCCompat && !Opts.CPlusPlus1z;
+   Opts.Trigraphs = !Opts.GNUMode && !Opts.MSVCCompat && !Opts.CPlusPlus17;
    Opts.Trigraphs =
        Args.hasFlag(OPT_ftrigraphs, OPT_fno_trigraphs, Opts.Trigraphs);
  
@@ -14506,7 +14600,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
      && Opts.OpenCLVersion >= 200);
    Opts.BlocksRuntimeOptional = Args.hasArg(OPT_fblocks_runtime_optional);
    Opts.CoroutinesTS = Args.hasArg(OPT_fcoroutines_ts);
-   
+ 
    // Enable [[]] attributes in C++11 by default.
    Opts.DoubleSquareBracketAttributes =
        Args.hasFlag(OPT_fdouble_square_bracket_attributes,
@@ -14716,16 +14810,22 @@ Index: lib/Frontend/CompilerInvocation.cpp
  
    // Check if -fopenmp is specified.
    Opts.OpenMP = Args.hasArg(options::OPT_fopenmp) ? 1 : 0;
+   // Check if -fopenmp-simd is specified.
+   Opts.OpenMPSimd = !Opts.OpenMP && Args.hasFlag(options::OPT_fopenmp_simd,
+                                                  options::OPT_fno_openmp_simd,
+                                                  /*Default=*/false);
    Opts.OpenMPUseTLS =
        Opts.OpenMP && !Args.hasArg(options::OPT_fnoopenmp_use_tls);
    Opts.OpenMPIsDevice =
        Opts.OpenMP && Args.hasArg(options::OPT_fopenmp_is_device);
  
-   if (Opts.OpenMP) {
-     int Version =
-         getLastArgIntValue(Args, OPT_fopenmp_version_EQ, Opts.OpenMP, Diags);
-     if (Version != 0)
+   if (Opts.OpenMP || Opts.OpenMPSimd) {
+     if (int Version =
+             getLastArgIntValue(Args, OPT_fopenmp_version_EQ,
+                                Opts.OpenMPSimd ? 45 : Opts.OpenMP, Diags))
        Opts.OpenMP = Version;
+     else if (Opts.OpenMPSimd)
+       Opts.OpenMP = 45;
      // Provide diagnostic when a given target is not expected to be an OpenMP
      // device or host.
      if (!Opts.OpenMPIsDevice) {
@@ -14905,7 +15005,6 @@ Index: lib/Frontend/CompilerInvocation.cpp
  }
  
  static void ParsePreprocessorArgs(PreprocessorOptions &Opts, ArgList &Args,
-                                   FileManager &FileMgr,
                                    DiagnosticsEngine &Diags,
                                    frontend::ActionKind Action) {
    using namespace options;
@@ -15061,7 +15160,13 @@ Index: lib/Frontend/CompilerInvocation.cpp
  
    // Issue errors on unknown arguments.
    for (const Arg *A : Args.filtered(OPT_UNKNOWN)) {
-     Diags.Report(diag::err_drv_unknown_argument) << A->getAsString(Args);
+     auto ArgString = A->getAsString(Args);
+     std::string Nearest;
+     if (Opts->findNearest(ArgString, Nearest, IncludedFlagsBitmask) > 1)
+       Diags.Report(diag::err_drv_unknown_argument) << ArgString;
+     else
+       Diags.Report(diag::err_drv_unknown_argument_with_suggestion)
+           << ArgString << Nearest;
      Success = false;
    }
  
@@ -15121,12 +15226,7 @@ Index: lib/Frontend/CompilerInvocation.cpp
        !LangOpts.Sanitize.has(SanitizerKind::Address) &&
        !LangOpts.Sanitize.has(SanitizerKind::Memory);
  
-   // FIXME: ParsePreprocessorArgs uses the FileManager to read the contents of
-   // PCH file and find the original header name. Remove the need to do that in
-   // ParsePreprocessorArgs and remove the FileManager
-   // parameters from the function and the "FileManager.h" #include.
-   FileManager FileMgr(Res.getFileSystemOpts());
-   ParsePreprocessorArgs(Res.getPreprocessorOpts(), Args, FileMgr, Diags,
+   ParsePreprocessorArgs(Res.getPreprocessorOpts(), Args, Diags,
                          Res.getFrontendOpts().ProgramAction);
    ParsePreprocessorOutputArgs(Res.getPreprocessorOutputOpts(), Args,
                                Res.getFrontendOpts().ProgramAction);
@@ -15311,9 +15411,9 @@ Index: lib/Frontend/CompilerInvocation.cpp
  } // end namespace clang
 Index: lib/Frontend/FrontendActions.cpp
 ===================================================================
---- lib/Frontend/FrontendActions.cpp	(revision 319617)
+--- lib/Frontend/FrontendActions.cpp	(revision 324194)
 +++ lib/Frontend/FrontendActions.cpp	(working copy)
-@@ -1,603 +1,749 @@
+@@ -1,603 +1,757 @@
  //===--- FrontendActions.cpp ----------------------------------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -15602,6 +15702,7 @@ Index: lib/Frontend/FrontendActions.cpp
 +  std::string Name;
 +  std::string Kind;
 +  std::string Event;
++  std::string DefinitionLocation;
 +  std::string PointOfInstantiation;
 +};
 +} // namespace
@@ -15613,6 +15714,7 @@ Index: lib/Frontend/FrontendActions.cpp
 +    io.mapRequired("name", fields.Name);
 +    io.mapRequired("kind", fields.Kind);
 +    io.mapRequired("event", fields.Event);
++    io.mapRequired("orig", fields.DefinitionLocation);
 +    io.mapRequired("poi", fields.PointOfInstantiation);
 +  }
 +};
@@ -15691,13 +15793,19 @@ Index: lib/Frontend/FrontendActions.cpp
 +    if (NamedDecl *NamedTemplate = dyn_cast_or_null<NamedDecl>(Inst.Entity)) {
 +      llvm::raw_string_ostream OS(Entry.Name);
 +      NamedTemplate->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
++      const PresumedLoc DefLoc = 
++        TheSema.getSourceManager().getPresumedLoc(Inst.Entity->getLocation());
++      if(!DefLoc.isInvalid())
++        Entry.DefinitionLocation = std::string(DefLoc.getFilename()) + ":" +
++                                   std::to_string(DefLoc.getLine()) + ":" +
++                                   std::to_string(DefLoc.getColumn());
 +    }
-+    const PresumedLoc Loc =
++    const PresumedLoc PoiLoc =
 +        TheSema.getSourceManager().getPresumedLoc(Inst.PointOfInstantiation);
-+    if (!Loc.isInvalid()) {
-+      Entry.PointOfInstantiation = std::string(Loc.getFilename()) + ":" +
-+                                   std::to_string(Loc.getLine()) + ":" +
-+                                   std::to_string(Loc.getColumn());
++    if (!PoiLoc.isInvalid()) {
++      Entry.PointOfInstantiation = std::string(PoiLoc.getFilename()) + ":" +
++                                   std::to_string(PoiLoc.getLine()) + ":" +
++                                   std::to_string(PoiLoc.getColumn());
 +    }
 +    return Entry;
 +  }
@@ -16065,7 +16173,7 @@ Index: lib/Frontend/FrontendActions.cpp
  }
 Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 ===================================================================
---- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 319617)
+--- lib/FrontendTool/ExecuteCompilerInvocation.cpp	(revision 324194)
 +++ lib/FrontendTool/ExecuteCompilerInvocation.cpp	(working copy)
 @@ -1,256 +1,261 @@
  //===--- ExecuteCompilerInvocation.cpp ------------------------------------===//
@@ -16333,7 +16441,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
 +}
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
---- lib/Parse/ParseAST.cpp	(revision 319617)
+--- lib/Parse/ParseAST.cpp	(revision 324194)
 +++ lib/Parse/ParseAST.cpp	(working copy)
 @@ -1,170 +1,182 @@
  //===--- ParseAST.cpp - Provide the clang::ParseAST method ----------------===//
@@ -16520,9 +16628,9 @@ Index: lib/Parse/ParseAST.cpp
  }
 Index: lib/Sema/Sema.cpp
 ===================================================================
---- lib/Sema/Sema.cpp	(revision 319617)
+--- lib/Sema/Sema.cpp	(revision 324194)
 +++ lib/Sema/Sema.cpp	(working copy)
-@@ -1,1840 +1,1841 @@
+@@ -1,1846 +1,1847 @@
  //===--- Sema.cpp - AST Builder and Semantic Analysis Implementation ------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -17055,7 +17163,7 @@ Index: lib/Sema/Sema.cpp
    case Type::STK_IntegralComplex: return CK_IntegralComplexToBoolean;
    case Type::STK_FloatingComplex: return CK_FloatingComplexToBoolean;
    }
-   return CK_Invalid;
+   llvm_unreachable("unknown scalar type kind");
  }
  
  /// \brief Used to prune the decls of Sema's UnusedFileScopedDecls vector.
@@ -17919,8 +18027,8 @@ Index: lib/Sema/Sema.cpp
      delete Scope;
  }
  
- void Sema::PushCompoundScope() {
-   getCurFunction()->CompoundScopes.push_back(CompoundScopeInfo());
+ void Sema::PushCompoundScope(bool IsStmtExpr) {
+   getCurFunction()->CompoundScopes.push_back(CompoundScopeInfo(IsStmtExpr));
  }
  
  void Sema::PopCompoundScope() {
@@ -18173,6 +18281,12 @@ Index: lib/Sema/Sema.cpp
      }
  
      NamedDecl *Fn = (*It)->getUnderlyingDecl();
+     // Don't print overloads for non-default multiversioned functions.
+     if (const auto *FD = Fn->getAsFunction()) {
+       if (FD->isMultiVersion() &&
+           !FD->getAttr<TargetAttr>()->isDefaultVersion())
+         continue;
+     }
      S.Diag(Fn->getLocation(), diag::note_possible_target_of_call);
      ++ShownOverloads;
    }
@@ -18366,7 +18480,7 @@ Index: lib/Sema/Sema.cpp
  }
 Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiate.cpp	(revision 319617)
+--- lib/Sema/SemaTemplateInstantiate.cpp	(revision 324194)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
 @@ -1,2988 +1,3001 @@
  //===------- SemaTemplateInstantiate.cpp - C++ Template Instantiation ------===/
@@ -20999,7 +21113,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
              continue;
            
            Var->setTemplateSpecializationKind(TSK, PointOfInstantiation);
-           InstantiateStaticDataMemberDefinition(PointOfInstantiation, Var);
+           InstantiateVariableDefinition(PointOfInstantiation, Var);
          } else {
            Var->setTemplateSpecializationKind(TSK, PointOfInstantiation);
          }
@@ -21374,9 +21488,9 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
  }
 Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
 ===================================================================
---- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 319617)
+--- lib/Sema/SemaTemplateInstantiateDecl.cpp	(revision 324194)
 +++ lib/Sema/SemaTemplateInstantiateDecl.cpp	(working copy)
-@@ -1,5230 +1,5233 @@
+@@ -1,5253 +1,5256 @@
  //===--- SemaTemplateInstantiateDecl.cpp - C++ Template Decl Instantiation ===/
  //
  //                     The LLVM Compiler Infrastructure
@@ -21723,14 +21837,6 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
        Attr.getRange());
  }
  
- static bool DeclContainsAttr(const Decl *D, const Attr *NewAttr) {
-   if (!D->hasAttrs() || NewAttr->duplicatesAllowed())
-     return false;
-   return llvm::find_if(D->getAttrs(), [NewAttr](const Attr *Attr) {
-            return Attr->getKind() == NewAttr->getKind();
-          }) != D->getAttrs().end();
- }
- 
  void Sema::InstantiateAttrsForDecl(
      const MultiLevelTemplateArgumentList &TemplateArgs, const Decl *Tmpl,
      Decl *New, LateInstantiatedAttrVec *LateAttrs,
@@ -21745,7 +21851,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
        Attr *NewAttr = sema::instantiateTemplateAttributeForDecl(
            TmplAttr, Context, *this, TemplateArgs);
-       if (NewAttr && !DeclContainsAttr(New, NewAttr))
+       if (NewAttr)
          New->addAttr(NewAttr);
      }
    }
@@ -21850,8 +21956,7 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  
        Attr *NewAttr = sema::instantiateTemplateAttribute(TmplAttr, Context,
                                                           *this, TemplateArgs);
- 
-       if (NewAttr && !DeclContainsAttr(New, NewAttr))
+       if (NewAttr)
          New->addAttr(NewAttr);
      }
    }
@@ -22967,9 +23072,10 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  }
  
  /// Normal class members are of more specific types and therefore
- /// don't make it here.  This function serves two purposes:
+ /// don't make it here.  This function serves three purposes:
  ///   1) instantiating function templates
  ///   2) substituting friend declarations
+ ///   3) substituting deduction guide declarations for nested class templates
  Decl *TemplateDeclInstantiator::VisitFunctionDecl(FunctionDecl *D,
                                         TemplateParameterList *TemplateParams) {
    // Check whether there is already a function template specialization for
@@ -23030,16 +23136,19 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
                                           TemplateArgs);
    }
  
+   DeclarationNameInfo NameInfo
+     = SemaRef.SubstDeclarationNameInfo(D->getNameInfo(), TemplateArgs);
+ 
    FunctionDecl *Function;
    if (auto *DGuide = dyn_cast<CXXDeductionGuideDecl>(D)) {
      Function = CXXDeductionGuideDecl::Create(
        SemaRef.Context, DC, D->getInnerLocStart(), DGuide->isExplicit(),
-       D->getNameInfo(), T, TInfo, D->getSourceRange().getEnd());
+       NameInfo, T, TInfo, D->getSourceRange().getEnd());
      if (DGuide->isCopyDeductionCandidate())
        cast<CXXDeductionGuideDecl>(Function)->setIsCopyDeductionCandidate();
    } else {
      Function = FunctionDecl::Create(
-         SemaRef.Context, DC, D->getInnerLocStart(), D->getNameInfo(), T, TInfo,
+         SemaRef.Context, DC, D->getInnerLocStart(), NameInfo, T, TInfo,
          D->getCanonicalDecl()->getStorageClass(), D->isInlineSpecified(),
          D->hasWrittenPrototype(), D->isConstexpr());
      Function->setRangeEnd(D->getSourceRange().getEnd());
@@ -25107,6 +25216,30 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
    return false;
  }
  
+ /// Instantiate (or find existing instantiation of) a function template with a
+ /// given set of template arguments.
+ ///
+ /// Usually this should not be used, and template argument deduction should be
+ /// used in its place.
+ FunctionDecl *
+ Sema::InstantiateFunctionDeclaration(FunctionTemplateDecl *FTD,
+                                      const TemplateArgumentList *Args,
+                                      SourceLocation Loc) {
+   FunctionDecl *FD = FTD->getTemplatedDecl();
+ 
+   sema::TemplateDeductionInfo Info(Loc);
+   InstantiatingTemplate Inst(
+       *this, Loc, FTD, Args->asArray(),
+       CodeSynthesisContext::ExplicitTemplateArgumentSubstitution, Info);
+   if (Inst.isInvalid())
+     return nullptr;
+ 
+   ContextRAII SavedContext(*this, FD);
+   MultiLevelTemplateArgumentList MArgs(*Args);
+ 
+   return cast_or_null<FunctionDecl>(SubstDecl(FD, FD->getParent(), MArgs));
+ }
+ 
  /// In the MS ABI, we need to instantiate default arguments of dllexported
  /// default constructors along with the constructor definition. This allows IR
  /// gen to emit a constructor closure which calls the default constructor with
@@ -25190,7 +25323,8 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
        PendingInstantiations.push_back(
          std::make_pair(Function, PointOfInstantiation));
      } else if (TSK == TSK_ImplicitInstantiation) {
-       if (AtEndOfTU && !getDiagnostics().hasErrorOccurred()) {
+       if (AtEndOfTU && !getDiagnostics().hasErrorOccurred() &&
+           !getSourceManager().isInSystemHeader(PatternDecl->getLocStart())) {
          Diag(PointOfInstantiation, diag::warn_func_template_missing)
            << Function;
          Diag(PatternDecl->getLocation(), diag::note_forward_template_decl);
@@ -25237,7 +25371,8 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
    }
  
    // Note, we should never try to instantiate a deleted function template.
-   assert((Pattern || PatternDecl->isDefaulted()) &&
+   assert((Pattern || PatternDecl->isDefaulted() ||
+           PatternDecl->hasSkippedBody()) &&
           "unexpected kind of function template definition");
  
    // C++1y [temp.explicit]p10:
@@ -25309,29 +25444,33 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
                                           TemplateArgs))
        return;
  
-     if (CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(Function)) {
-       // If this is a constructor, instantiate the member initializers.
-       InstantiateMemInitializers(Ctor, cast<CXXConstructorDecl>(PatternDecl),
-                                  TemplateArgs);
+     if (PatternDecl->hasSkippedBody()) {
+       ActOnSkippedFunctionBody(Function);
+     } else {
+       if (CXXConstructorDecl *Ctor = dyn_cast<CXXConstructorDecl>(Function)) {
+         // If this is a constructor, instantiate the member initializers.
+         InstantiateMemInitializers(Ctor, cast<CXXConstructorDecl>(PatternDecl),
+                                    TemplateArgs);
  
-       // If this is an MS ABI dllexport default constructor, instantiate any
-       // default arguments.
-       if (Context.getTargetInfo().getCXXABI().isMicrosoft() &&
-           Ctor->isDefaultConstructor()) {
-         InstantiateDefaultCtorDefaultArgs(*this, Ctor);
+         // If this is an MS ABI dllexport default constructor, instantiate any
+         // default arguments.
+         if (Context.getTargetInfo().getCXXABI().isMicrosoft() &&
+             Ctor->isDefaultConstructor()) {
+           InstantiateDefaultCtorDefaultArgs(*this, Ctor);
+         }
        }
+ 
+       // Instantiate the function body.
+       StmtResult Body = SubstStmt(Pattern, TemplateArgs);
+ 
+       if (Body.isInvalid())
+         Function->setInvalidDecl();
+ 
+       // FIXME: finishing the function body while in an expression evaluation
+       // context seems wrong. Investigate more.
+       ActOnFinishFunctionBody(Function, Body.get(),
+                               /*IsInstantiation=*/true);
      }
- 
-     // Instantiate the function body.
-     StmtResult Body = SubstStmt(Pattern, TemplateArgs);
- 
-     if (Body.isInvalid())
-       Function->setInvalidDecl();
- 
-     // FIXME: finishing the function body while in an expression evaluation
-     // context seems wrong. Investigate more.
-     ActOnFinishFunctionBody(Function, Body.get(),
-                             /*IsInstantiation=*/true);
  
      PerformDependentDiagnostics(PatternDecl, TemplateArgs);
  
@@ -25508,7 +25647,8 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
    // it right away if the type contains 'auto'.
    if ((!isa<VarTemplateSpecializationDecl>(NewVar) &&
         !InstantiatingVarTemplate &&
-        !(OldVar->isInline() && OldVar->isThisDeclarationADefinition())) ||
+        !(OldVar->isInline() && OldVar->isThisDeclarationADefinition() &&
+          !NewVar->isThisDeclarationADefinition())) ||
        NewVar->getType()->isUndeducedType())
      InstantiateVariableInitializer(NewVar, OldVar, TemplateArgs);
  
@@ -25524,6 +25664,9 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  void Sema::InstantiateVariableInitializer(
      VarDecl *Var, VarDecl *OldVar,
      const MultiLevelTemplateArgumentList &TemplateArgs) {
+   if (ASTMutationListener *L = getASTContext().getASTMutationListener())
+     L->VariableDefinitionInstantiated(Var);
+ 
    // We propagate the 'inline' flag with the initializer, because it
    // would otherwise imply that the variable is a definition for a
    // non-static data member.
@@ -25586,35 +25729,21 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  ///
  /// \param PointOfInstantiation the point at which the instantiation was
  /// required. Note that this is not precisely a "point of instantiation"
- /// for the function, but it's close.
+ /// for the variable, but it's close.
  ///
- /// \param Var the already-instantiated declaration of a static member
- /// variable of a class template specialization.
+ /// \param Var the already-instantiated declaration of a templated variable.
  ///
  /// \param Recursive if true, recursively instantiates any functions that
  /// are required by this instantiation.
  ///
  /// \param DefinitionRequired if true, then we are performing an explicit
- /// instantiation where an out-of-line definition of the member variable
- /// is required. Complain if there is no such definition.
- void Sema::InstantiateStaticDataMemberDefinition(
-                                           SourceLocation PointOfInstantiation,
-                                                  VarDecl *Var,
-                                                  bool Recursive,
-                                                  bool DefinitionRequired) {
-   InstantiateVariableDefinition(PointOfInstantiation, Var, Recursive,
-                                 DefinitionRequired);
- }
- 
+ /// instantiation where a definition of the variable is required. Complain
+ /// if there is no such definition.
  void Sema::InstantiateVariableDefinition(SourceLocation PointOfInstantiation,
                                           VarDecl *Var, bool Recursive,
                                        bool DefinitionRequired, bool AtEndOfTU) {
    if (Var->isInvalidDecl())
      return;
- 
-   // FIXME: We're missing ASTMutationListener notifications for all of the work
-   // done here. (Some of our callers notify the listeners for the static data
-   // member case, but not in general.)
  
    VarTemplateSpecializationDecl *VarSpec =
        dyn_cast<VarTemplateSpecializationDecl>(Var);
@@ -25666,6 +25795,11 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
      // If this is a static data member template, there might be an
      // uninstantiated initializer on the declaration. If so, instantiate
      // it now.
+     //
+     // FIXME: This largely duplicates what we would do below. The difference
+     // is that along this path we may instantiate an initializer from an
+     // in-class declaration of the template and instantiate the definition
+     // from a separate out-of-class definition.
      if (PatternDecl->isStaticDataMember() &&
          (PatternDecl = PatternDecl->getFirstDecl())->hasInit() &&
          !Var->hasInit()) {
@@ -25726,7 +25860,8 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
          std::make_pair(Var, PointOfInstantiation));
      } else if (TSK == TSK_ImplicitInstantiation) {
        // Warn about missing definition at the end of translation unit.
-       if (AtEndOfTU && !getDiagnostics().hasErrorOccurred()) {
+       if (AtEndOfTU && !getDiagnostics().hasErrorOccurred() &&
+           !getSourceManager().isInSystemHeader(PatternDecl->getLocStart())) {
          Diag(PointOfInstantiation, diag::warn_var_template_missing)
            << Var;
          Diag(PatternDecl->getLocation(), diag::note_forward_template_decl);
@@ -26583,7 +26718,9 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
      case TSK_ExplicitInstantiationDefinition:
        // We only need an instantiation if the pending instantiation *is* the
        // explicit instantiation.
-       if (Var != Var->getMostRecentDecl()) continue;
+       if (Var != Var->getMostRecentDecl())
+         continue;
+       break;
      case TSK_ImplicitInstantiation:
        break;
      }
@@ -26612,9 +26749,9 @@ Index: lib/Sema/SemaTemplateInstantiateDecl.cpp
  }
 Index: lib/Sema/SemaType.cpp
 ===================================================================
---- lib/Sema/SemaType.cpp	(revision 319617)
+--- lib/Sema/SemaType.cpp	(revision 324194)
 +++ lib/Sema/SemaType.cpp	(working copy)
-@@ -1,7961 +1,7970 @@
+@@ -1,7993 +1,8002 @@
  //===--- SemaType.cpp - Semantic Analysis for Types -----------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -26665,7 +26802,7 @@ Index: lib/Sema/SemaType.cpp
  /// isOmittedBlockReturnType - Return true if this declarator is missing a
  /// return type because this is a omitted return type on a block literal.
  static bool isOmittedBlockReturnType(const Declarator &D) {
-   if (D.getContext() != Declarator::BlockLiteralContext ||
+   if (D.getContext() != DeclaratorContext::BlockLiteralContext ||
        D.getDeclSpec().hasTypeSpecifier())
      return false;
  
@@ -26985,7 +27122,7 @@ Index: lib/Sema/SemaType.cpp
            if (onlyBlockPointers)
              continue;
  
-           // fallthrough
+           LLVM_FALLTHROUGH;
  
          case DeclaratorChunk::BlockPointer:
            result = &ptrChunk;
@@ -27909,11 +28046,12 @@ Index: lib/Sema/SemaType.cpp
      // The declspec is always missing in a lambda expr context; it is either
      // specified with a trailing return type or inferred.
      if (S.getLangOpts().CPlusPlus14 &&
-         declarator.getContext() == Declarator::LambdaExprContext) {
+         declarator.getContext() == DeclaratorContext::LambdaExprContext) {
        // In C++1y, a lambda's implicit return type is 'auto'.
        Result = Context.getAutoDeductType();
        break;
-     } else if (declarator.getContext() == Declarator::LambdaExprContext ||
+     } else if (declarator.getContext() ==
+                    DeclaratorContext::LambdaExprContext ||
                 checkOmittedBlockReturnType(S, declarator,
                                             Context.DependentTy)) {
        Result = Context.DependentTy;
@@ -27958,7 +28096,7 @@ Index: lib/Sema/SemaType.cpp
        }
      }
  
-     // FALL THROUGH.
+     LLVM_FALLTHROUGH;
    case DeclSpec::TST_int: {
      if (DS.getTypeSpecSign() != DeclSpec::TSS_unsigned) {
        switch (DS.getTypeSpecWidth()) {
@@ -28190,7 +28328,7 @@ Index: lib/Sema/SemaType.cpp
  
    // Before we process any type attributes, synthesize a block literal
    // function declarator if necessary.
-   if (declarator.getContext() == Declarator::BlockLiteralContext)
+   if (declarator.getContext() == DeclaratorContext::BlockLiteralContext)
      maybeSynthesizeBlockSignature(state, Result);
  
    // Apply any type attributes from the decl spec.  This may cause the
@@ -29320,7 +29458,7 @@ Index: lib/Sema/SemaType.cpp
    // If the qualifiers come from a conversion function type, don't diagnose
    // them -- they're not necessarily redundant, since such a conversion
    // operator can be explicitly called as "x.operator const int()".
-   if (D.getName().getKind() == UnqualifiedId::IK_ConversionFunctionId)
+   if (D.getName().getKind() == UnqualifiedIdKind::IK_ConversionFunctionId)
      return;
  
    // Just parens all the way out to the decl specifiers. Diagnose any qualifiers
@@ -29346,11 +29484,11 @@ Index: lib/Sema/SemaType.cpp
    TagDecl *OwnedTagDecl = nullptr;
  
    switch (D.getName().getKind()) {
-   case UnqualifiedId::IK_ImplicitSelfParam:
-   case UnqualifiedId::IK_OperatorFunctionId:
-   case UnqualifiedId::IK_Identifier:
-   case UnqualifiedId::IK_LiteralOperatorId:
-   case UnqualifiedId::IK_TemplateId:
+   case UnqualifiedIdKind::IK_ImplicitSelfParam:
+   case UnqualifiedIdKind::IK_OperatorFunctionId:
+   case UnqualifiedIdKind::IK_Identifier:
+   case UnqualifiedIdKind::IK_LiteralOperatorId:
+   case UnqualifiedIdKind::IK_TemplateId:
      T = ConvertDeclSpecToType(state);
  
      if (!D.isInvalidType() && D.getDeclSpec().isTypeSpecOwned()) {
@@ -29360,9 +29498,9 @@ Index: lib/Sema/SemaType.cpp
      }
      break;
  
-   case UnqualifiedId::IK_ConstructorName:
-   case UnqualifiedId::IK_ConstructorTemplateId:
-   case UnqualifiedId::IK_DestructorName:
+   case UnqualifiedIdKind::IK_ConstructorName:
+   case UnqualifiedIdKind::IK_ConstructorTemplateId:
+   case UnqualifiedIdKind::IK_DestructorName:
      // Constructors and destructors don't have return types. Use
      // "void" instead.
      T = SemaRef.Context.VoidTy;
@@ -29370,13 +29508,13 @@ Index: lib/Sema/SemaType.cpp
                       D.getDeclSpec().getAttributes().getList());
      break;
  
-   case UnqualifiedId::IK_DeductionGuideName:
+   case UnqualifiedIdKind::IK_DeductionGuideName:
      // Deduction guides have a trailing return type and no type in their
      // decl-specifier sequence. Use a placeholder return type for now.
      T = SemaRef.Context.DependentTy;
      break;
  
-   case UnqualifiedId::IK_ConversionFunctionId:
+   case UnqualifiedIdKind::IK_ConversionFunctionId:
      // The result type of a conversion function is the type that it
      // converts to.
      T = SemaRef.GetTypeFromParser(D.getName().ConversionFunctionId,
@@ -29398,16 +29536,16 @@ Index: lib/Sema/SemaType.cpp
          (Auto && Auto->getKeyword() != AutoTypeKeyword::GNUAutoType);
  
      switch (D.getContext()) {
-     case Declarator::LambdaExprContext:
+     case DeclaratorContext::LambdaExprContext:
        // Declared return type of a lambda-declarator is implicit and is always
        // 'auto'.
        break;
-     case Declarator::ObjCParameterContext:
-     case Declarator::ObjCResultContext:
-     case Declarator::PrototypeContext:
+     case DeclaratorContext::ObjCParameterContext:
+     case DeclaratorContext::ObjCResultContext:
+     case DeclaratorContext::PrototypeContext:
        Error = 0;  
        break;
-     case Declarator::LambdaExprParameterContext:
+     case DeclaratorContext::LambdaExprParameterContext:
        // In C++14, generic lambdas allow 'auto' in their parameters.
        if (!SemaRef.getLangOpts().CPlusPlus14 ||
            !Auto || Auto->getKeyword() != AutoTypeKeyword::Auto)
@@ -29439,7 +29577,7 @@ Index: lib/Sema/SemaType.cpp
              T, QualType(CorrespondingTemplateParam->getTypeForDecl(), 0));
        }
        break;
-     case Declarator::MemberContext: {
+     case DeclaratorContext::MemberContext: {
        if (D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static ||
            D.isFunctionDeclarator())
          break;
@@ -29455,57 +29593,58 @@ Index: lib/Sema/SemaType.cpp
          Error = 20; // Friend type
        break;
      }
-     case Declarator::CXXCatchContext:
-     case Declarator::ObjCCatchContext:
+     case DeclaratorContext::CXXCatchContext:
+     case DeclaratorContext::ObjCCatchContext:
        Error = 7; // Exception declaration
        break;
-     case Declarator::TemplateParamContext:
+     case DeclaratorContext::TemplateParamContext:
        if (isa<DeducedTemplateSpecializationType>(Deduced))
          Error = 19; // Template parameter
-       else if (!SemaRef.getLangOpts().CPlusPlus1z)
-         Error = 8; // Template parameter (until C++1z)
+       else if (!SemaRef.getLangOpts().CPlusPlus17)
+         Error = 8; // Template parameter (until C++17)
        break;
-     case Declarator::BlockLiteralContext:
+     case DeclaratorContext::BlockLiteralContext:
        Error = 9; // Block literal
        break;
-     case Declarator::TemplateTypeArgContext:
+     case DeclaratorContext::TemplateTypeArgContext:
        Error = 10; // Template type argument
        break;
-     case Declarator::AliasDeclContext:
-     case Declarator::AliasTemplateContext:
+     case DeclaratorContext::AliasDeclContext:
+     case DeclaratorContext::AliasTemplateContext:
        Error = 12; // Type alias
        break;
-     case Declarator::TrailingReturnContext:
+     case DeclaratorContext::TrailingReturnContext:
+     case DeclaratorContext::TrailingReturnVarContext:
        if (!SemaRef.getLangOpts().CPlusPlus14 || !IsCXXAutoType)
          Error = 13; // Function return type
        break;
-     case Declarator::ConversionIdContext:
+     case DeclaratorContext::ConversionIdContext:
        if (!SemaRef.getLangOpts().CPlusPlus14 || !IsCXXAutoType)
          Error = 14; // conversion-type-id
        break;
-     case Declarator::FunctionalCastContext:
+     case DeclaratorContext::FunctionalCastContext:
        if (isa<DeducedTemplateSpecializationType>(Deduced))
          break;
        LLVM_FALLTHROUGH;
-     case Declarator::TypeNameContext:
+     case DeclaratorContext::TypeNameContext:
        Error = 15; // Generic
        break;
-     case Declarator::FileContext:
-     case Declarator::BlockContext:
-     case Declarator::ForContext:
-     case Declarator::InitStmtContext:
-     case Declarator::ConditionContext:
+     case DeclaratorContext::FileContext:
+     case DeclaratorContext::BlockContext:
+     case DeclaratorContext::ForContext:
+     case DeclaratorContext::InitStmtContext:
+     case DeclaratorContext::ConditionContext:
        // FIXME: P0091R3 (erroneously) does not permit class template argument
        // deduction in conditions, for-init-statements, and other declarations
        // that are not simple-declarations.
        break;
-     case Declarator::CXXNewContext:
+     case DeclaratorContext::CXXNewContext:
        // FIXME: P0091R3 does not permit class template argument deduction here,
        // but we follow GCC and allow it anyway.
        if (!IsCXXAutoType && !isa<DeducedTemplateSpecializationType>(Deduced))
          Error = 17; // 'new' type
        break;
-     case Declarator::KNRTypeListContext:
+     case DeclaratorContext::KNRTypeListContext:
        Error = 18; // K&R function parameter
        break;
      }
@@ -29534,7 +29673,7 @@ Index: lib/Sema/SemaType.cpp
      }
  
      SourceRange AutoRange = D.getDeclSpec().getTypeSpecTypeLoc();
-     if (D.getName().getKind() == UnqualifiedId::IK_ConversionFunctionId)
+     if (D.getName().getKind() == UnqualifiedIdKind::IK_ConversionFunctionId)
        AutoRange = D.getName().getSourceRange();
  
      if (Error != -1) {
@@ -29577,47 +29716,48 @@ Index: lib/Sema/SemaType.cpp
      // or enumeration in a type-specifier-seq.
      unsigned DiagID = 0;
      switch (D.getContext()) {
-     case Declarator::TrailingReturnContext:
+     case DeclaratorContext::TrailingReturnContext:
+     case DeclaratorContext::TrailingReturnVarContext:
        // Class and enumeration definitions are syntactically not allowed in
        // trailing return types.
        llvm_unreachable("parser should not have allowed this");
        break;
-     case Declarator::FileContext:
-     case Declarator::MemberContext:
-     case Declarator::BlockContext:
-     case Declarator::ForContext:
-     case Declarator::InitStmtContext:
-     case Declarator::BlockLiteralContext:
-     case Declarator::LambdaExprContext:
+     case DeclaratorContext::FileContext:
+     case DeclaratorContext::MemberContext:
+     case DeclaratorContext::BlockContext:
+     case DeclaratorContext::ForContext:
+     case DeclaratorContext::InitStmtContext:
+     case DeclaratorContext::BlockLiteralContext:
+     case DeclaratorContext::LambdaExprContext:
        // C++11 [dcl.type]p3:
        //   A type-specifier-seq shall not define a class or enumeration unless
        //   it appears in the type-id of an alias-declaration (7.1.3) that is not
        //   the declaration of a template-declaration.
-     case Declarator::AliasDeclContext:
+     case DeclaratorContext::AliasDeclContext:
        break;
-     case Declarator::AliasTemplateContext:
+     case DeclaratorContext::AliasTemplateContext:
        DiagID = diag::err_type_defined_in_alias_template;
        break;
-     case Declarator::TypeNameContext:
-     case Declarator::FunctionalCastContext:
-     case Declarator::ConversionIdContext:
-     case Declarator::TemplateParamContext:
-     case Declarator::CXXNewContext:
-     case Declarator::CXXCatchContext:
-     case Declarator::ObjCCatchContext:
-     case Declarator::TemplateTypeArgContext:
+     case DeclaratorContext::TypeNameContext:
+     case DeclaratorContext::FunctionalCastContext:
+     case DeclaratorContext::ConversionIdContext:
+     case DeclaratorContext::TemplateParamContext:
+     case DeclaratorContext::CXXNewContext:
+     case DeclaratorContext::CXXCatchContext:
+     case DeclaratorContext::ObjCCatchContext:
+     case DeclaratorContext::TemplateTypeArgContext:
        DiagID = diag::err_type_defined_in_type_specifier;
        break;
-     case Declarator::PrototypeContext:
-     case Declarator::LambdaExprParameterContext:
-     case Declarator::ObjCParameterContext:
-     case Declarator::ObjCResultContext:
-     case Declarator::KNRTypeListContext:
+     case DeclaratorContext::PrototypeContext:
+     case DeclaratorContext::LambdaExprParameterContext:
+     case DeclaratorContext::ObjCParameterContext:
+     case DeclaratorContext::ObjCResultContext:
+     case DeclaratorContext::KNRTypeListContext:
        // C++ [dcl.fct]p6:
        //   Types shall not be defined in return or parameter types.
        DiagID = diag::err_type_defined_in_param_type;
        break;
-     case Declarator::ConditionContext:
+     case DeclaratorContext::ConditionContext:
        // C++ 6.4p2:
        // The type-specifier-seq shall not contain typedef and shall not declare
        // a new class or enumeration.
@@ -29666,7 +29806,7 @@ Index: lib/Sema/SemaType.cpp
  
    // Inside a condition, a direct initializer is not permitted. We allow one to
    // be parsed in order to give better diagnostics in condition parsing.
-   if (D.getContext() == Declarator::ConditionContext)
+   if (D.getContext() == DeclaratorContext::ConditionContext)
      return;
  
    SourceRange ParenRange(DeclType.Loc, DeclType.EndLoc);
@@ -29755,10 +29895,15 @@ Index: lib/Sema/SemaType.cpp
        (T->isRecordType() || T->isDependentType()) &&
        D.getDeclSpec().getTypeQualifiers() == 0 && D.isFirstDeclarator();
  
+   bool StartsWithDeclaratorId = true;
    for (auto &C : D.type_objects()) {
      switch (C.Kind) {
-     case DeclaratorChunk::Pointer:
      case DeclaratorChunk::Paren:
+       if (&C == &Paren)
+         continue;
+       LLVM_FALLTHROUGH;
+     case DeclaratorChunk::Pointer:
+       StartsWithDeclaratorId = false;
        continue;
  
      case DeclaratorChunk::Array:
@@ -29772,18 +29917,25 @@ Index: lib/Sema/SemaType.cpp
        // We assume that something like 'T (&x) = y;' is highly likely to not
        // be intended to be a temporary object.
        CouldBeTemporaryObject = false;
+       StartsWithDeclaratorId = false;
        continue;
  
      case DeclaratorChunk::Function:
        // In a new-type-id, function chunks require parentheses.
-       if (D.getContext() == Declarator::CXXNewContext)
+       if (D.getContext() == DeclaratorContext::CXXNewContext)
          return;
-       LLVM_FALLTHROUGH;
+       // FIXME: "A(f())" deserves a vexing-parse warning, not just a
+       // redundant-parens warning, but we don't know whether the function
+       // chunk was syntactically valid as an expression here.
+       CouldBeTemporaryObject = false;
+       continue;
+ 
      case DeclaratorChunk::BlockPointer:
      case DeclaratorChunk::MemberPointer:
      case DeclaratorChunk::Pipe:
        // These cannot appear in expressions.
        CouldBeTemporaryObject = false;
+       StartsWithDeclaratorId = false;
        continue;
      }
    }
@@ -29804,6 +29956,18 @@ Index: lib/Sema/SemaType.cpp
    SourceRange ParenRange(Paren.Loc, Paren.EndLoc);
  
    if (!CouldBeTemporaryObject) {
+     // If we have A (::B), the parentheses affect the meaning of the program.
+     // Suppress the warning in that case. Don't bother looking at the DeclSpec
+     // here: even (e.g.) "int ::x" is visually ambiguous even though it's
+     // formally unambiguous.
+     if (StartsWithDeclaratorId && D.getCXXScopeSpec().isValid()) {
+       for (NestedNameSpecifier *NNS = D.getCXXScopeSpec().getScopeRep(); NNS;
+            NNS = NNS->getPrefix()) {
+         if (NNS->getKind() == NestedNameSpecifier::Global)
+           return;
+       }
+     }
+ 
      S.Diag(Paren.Loc, diag::warn_redundant_parens_around_declarator)
          << ParenRange << FixItHint::CreateRemoval(Paren.Loc)
          << FixItHint::CreateRemoval(Paren.EndLoc);
@@ -29876,7 +30040,7 @@ Index: lib/Sema/SemaType.cpp
        // in a member pointer.
        IsCXXInstanceMethod =
            D.getTypeObject(I).Kind == DeclaratorChunk::MemberPointer;
-     } else if (D.getContext() == Declarator::LambdaExprContext) {
+     } else if (D.getContext() == DeclaratorContext::LambdaExprContext) {
        // This can only be a call operator for a lambda, which is an instance
        // method.
        IsCXXInstanceMethod = true;
@@ -30373,8 +30537,8 @@ Index: lib/Sema/SemaType.cpp
    // Does this declaration declare a typedef-name?
    bool IsTypedefName =
      D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_typedef ||
-     D.getContext() == Declarator::AliasDeclContext ||
-     D.getContext() == Declarator::AliasTemplateContext;
+     D.getContext() == DeclaratorContext::AliasDeclContext ||
+     D.getContext() == DeclaratorContext::AliasTemplateContext;
  
    // Does T refer to a function type with a cv-qualifier or a ref-qualifier?
    bool IsQualifiedFunction = T->isFunctionProtoType() &&
@@ -30503,14 +30667,15 @@ Index: lib/Sema/SemaType.cpp
    } else {
      bool isFunctionOrMethod = false;
      switch (auto context = state.getDeclarator().getContext()) {
-     case Declarator::ObjCParameterContext:
-     case Declarator::ObjCResultContext:
-     case Declarator::PrototypeContext:
-     case Declarator::TrailingReturnContext:
+     case DeclaratorContext::ObjCParameterContext:
+     case DeclaratorContext::ObjCResultContext:
+     case DeclaratorContext::PrototypeContext:
+     case DeclaratorContext::TrailingReturnContext:
+     case DeclaratorContext::TrailingReturnVarContext:
        isFunctionOrMethod = true;
-       // fallthrough
+       LLVM_FALLTHROUGH;
  
-     case Declarator::MemberContext:
+     case DeclaratorContext::MemberContext:
        if (state.getDeclarator().isObjCIvar() && !isFunctionOrMethod) {
          complainAboutMissingNullability = CAMN_No;
          break;
@@ -30522,10 +30687,10 @@ Index: lib/Sema/SemaType.cpp
          break;
        }
  
-       // fallthrough
+       LLVM_FALLTHROUGH;
  
-     case Declarator::FileContext:
-     case Declarator::KNRTypeListContext: {
+     case DeclaratorContext::FileContext:
+     case DeclaratorContext::KNRTypeListContext: {
        complainAboutMissingNullability = CAMN_Yes;
  
        // Nullability inference depends on the type and declarator.
@@ -30541,8 +30706,9 @@ Index: lib/Sema/SemaType.cpp
          if (inAssumeNonNullRegion) {
            complainAboutInferringWithinChunk = wrappingKind;
            inferNullability = NullabilityKind::NonNull;
-           inferNullabilityCS = (context == Declarator::ObjCParameterContext ||
-                                 context == Declarator::ObjCResultContext);
+           inferNullabilityCS =
+               (context == DeclaratorContext::ObjCParameterContext ||
+                context == DeclaratorContext::ObjCResultContext);
          }
          break;
  
@@ -30582,26 +30748,26 @@ Index: lib/Sema/SemaType.cpp
        break;
      }
  
-     case Declarator::ConversionIdContext:
+     case DeclaratorContext::ConversionIdContext:
        complainAboutMissingNullability = CAMN_Yes;
        break;
  
-     case Declarator::AliasDeclContext:
-     case Declarator::AliasTemplateContext:
-     case Declarator::BlockContext:
-     case Declarator::BlockLiteralContext:
-     case Declarator::ConditionContext:
-     case Declarator::CXXCatchContext:
-     case Declarator::CXXNewContext:
-     case Declarator::ForContext:
-     case Declarator::InitStmtContext:
-     case Declarator::LambdaExprContext:
-     case Declarator::LambdaExprParameterContext:
-     case Declarator::ObjCCatchContext:
-     case Declarator::TemplateParamContext:
-     case Declarator::TemplateTypeArgContext:
-     case Declarator::TypeNameContext:
-     case Declarator::FunctionalCastContext:
+     case DeclaratorContext::AliasDeclContext:
+     case DeclaratorContext::AliasTemplateContext:
+     case DeclaratorContext::BlockContext:
+     case DeclaratorContext::BlockLiteralContext:
+     case DeclaratorContext::ConditionContext:
+     case DeclaratorContext::CXXCatchContext:
+     case DeclaratorContext::CXXNewContext:
+     case DeclaratorContext::ForContext:
+     case DeclaratorContext::InitStmtContext:
+     case DeclaratorContext::LambdaExprContext:
+     case DeclaratorContext::LambdaExprParameterContext:
+     case DeclaratorContext::ObjCCatchContext:
+     case DeclaratorContext::TemplateParamContext:
+     case DeclaratorContext::TemplateTypeArgContext:
+     case DeclaratorContext::TypeNameContext:
+     case DeclaratorContext::FunctionalCastContext:
        // Don't infer in these contexts.
        break;
      }
@@ -30681,7 +30847,7 @@ Index: lib/Sema/SemaType.cpp
      case CAMN_InnerPointers:
        if (NumPointersRemaining == 0)
          break;
-       // Fallthrough.
+       LLVM_FALLTHROUGH;
  
      case CAMN_Yes:
        checkNullabilityConsistency(S, pointerKind, pointerLoc, pointerEndLoc);
@@ -30837,7 +31003,7 @@ Index: lib/Sema/SemaType.cpp
        // array type, ...
        if (ASM == ArrayType::Static || ATI.TypeQuals) {
          if (!(D.isPrototypeContext() ||
-               D.getContext() == Declarator::KNRTypeListContext)) {
+               D.getContext() == DeclaratorContext::KNRTypeListContext)) {
            S.Diag(DeclType.Loc, diag::err_array_static_outside_prototype) <<
                (ASM == ArrayType::Static ? "'static'" : "type qualifier");
            // Remove the 'static' and the type qualifiers.
@@ -30861,7 +31027,8 @@ Index: lib/Sema/SemaType.cpp
        const AutoType *AT = T->getContainedAutoType();
        // Allow arrays of auto if we are a generic lambda parameter.
        // i.e. [](auto (&array)[5]) { return array[0]; }; OK
-       if (AT && D.getContext() != Declarator::LambdaExprParameterContext) {
+       if (AT &&
+           D.getContext() != DeclaratorContext::LambdaExprParameterContext) {
          // We've already diagnosed this for decltype(auto).
          if (!AT->isDecltypeAuto())
            S.Diag(DeclType.Loc, diag::err_illegal_decl_array_of_auto)
@@ -30913,14 +31080,14 @@ Index: lib/Sema/SemaType.cpp
                << T << D.getSourceRange();
              D.setInvalidType(true);
            } else if (D.getName().getKind() ==
-                          UnqualifiedId::IK_DeductionGuideName) {
+                      UnqualifiedIdKind::IK_DeductionGuideName) {
              if (T != Context.DependentTy) {
                S.Diag(D.getDeclSpec().getLocStart(),
                       diag::err_deduction_guide_with_complex_decl)
                    << D.getSourceRange();
                D.setInvalidType(true);
              }
-           } else if (D.getContext() != Declarator::LambdaExprContext &&
+           } else if (D.getContext() != DeclaratorContext::LambdaExprContext &&
                       (T.hasQualifiers() || !isa<AutoType>(T) ||
                        cast<AutoType>(T)->getKeyword() !=
                            AutoTypeKeyword::Auto)) {
@@ -30941,12 +31108,13 @@ Index: lib/Sema/SemaType.cpp
        // C99 6.7.5.3p1: The return type may not be a function or array type.
        // For conversion functions, we'll diagnose this particular error later.
        if (!D.isInvalidType() && (T->isArrayType() || T->isFunctionType()) &&
-           (D.getName().getKind() != UnqualifiedId::IK_ConversionFunctionId)) {
+           (D.getName().getKind() !=
+            UnqualifiedIdKind::IK_ConversionFunctionId)) {
          unsigned diagID = diag::err_func_returning_array_function;
          // Last processing chunk in block context means this function chunk
          // represents the block.
          if (chunkIndex == 0 &&
-             D.getContext() == Declarator::BlockLiteralContext)
+             D.getContext() == DeclaratorContext::BlockLiteralContext)
            diagID = diag::err_block_returning_array_function;
          S.Diag(DeclType.Loc, diagID) << T->isFunctionType() << T;
          T = Context.IntTy;
@@ -31081,11 +31249,11 @@ Index: lib/Sema/SemaType.cpp
  
        // Exception specs are not allowed in typedefs. Complain, but add it
        // anyway.
-       if (IsTypedefName && FTI.getExceptionSpecType() && !LangOpts.CPlusPlus1z)
+       if (IsTypedefName && FTI.getExceptionSpecType() && !LangOpts.CPlusPlus17)
          S.Diag(FTI.getExceptionSpecLocBeg(),
                 diag::err_exception_spec_in_typedef)
-             << (D.getContext() == Declarator::AliasDeclContext ||
-                 D.getContext() == Declarator::AliasTemplateContext);
+             << (D.getContext() == DeclaratorContext::AliasDeclContext ||
+                 D.getContext() == DeclaratorContext::AliasTemplateContext);
  
        // If we see "T var();" or "T var(T());" at block scope, it is probably
        // an attempt to initialize a variable, not a function declaration.
@@ -31357,7 +31525,7 @@ Index: lib/Sema/SemaType.cpp
          break;
        case DeclaratorChunk::Function: {
          const DeclaratorChunk::FunctionTypeInfo &FTI = DeclType.Fun;
-         if (FTI.NumParams == 0)
+         if (FTI.NumParams == 0 && !FTI.isVariadic)
            S.Diag(DeclType.Loc, diag::warn_strict_prototypes)
                << IsBlock
                << FixItHint::CreateInsertion(FTI.getRParenLoc(), "void");
@@ -31385,11 +31553,11 @@ Index: lib/Sema/SemaType.cpp
      // Core issue 547 also allows cv-qualifiers on function types that are
      // top-level template type arguments.
      enum { NonMember, Member, DeductionGuide } Kind = NonMember;
-     if (D.getName().getKind() == UnqualifiedId::IK_DeductionGuideName)
+     if (D.getName().getKind() == UnqualifiedIdKind::IK_DeductionGuideName)
        Kind = DeductionGuide;
      else if (!D.getCXXScopeSpec().isSet()) {
-       if ((D.getContext() == Declarator::MemberContext ||
-            D.getContext() == Declarator::LambdaExprContext) &&
+       if ((D.getContext() == DeclaratorContext::MemberContext ||
+            D.getContext() == DeclaratorContext::LambdaExprContext) &&
            !D.getDeclSpec().isFriendSpecified())
          Kind = Member;
      } else {
@@ -31418,7 +31586,7 @@ Index: lib/Sema/SemaType.cpp
          !(Kind == Member &&
            D.getDeclSpec().getStorageClassSpec() != DeclSpec::SCS_static) &&
          !IsTypedefName &&
-         D.getContext() != Declarator::TemplateTypeArgContext) {
+         D.getContext() != DeclaratorContext::TemplateTypeArgContext) {
        SourceLocation Loc = D.getLocStart();
        SourceRange RemovalRange;
        unsigned I;
@@ -31484,8 +31652,8 @@ Index: lib/Sema/SemaType.cpp
      //   only be used in a parameter-declaration. Such a parameter-declaration
      //   is a parameter pack (14.5.3). [...]
      switch (D.getContext()) {
-     case Declarator::PrototypeContext:
-     case Declarator::LambdaExprParameterContext:
+     case DeclaratorContext::PrototypeContext:
+     case DeclaratorContext::LambdaExprParameterContext:
        // C++0x [dcl.fct]p13:
        //   [...] When it is part of a parameter-declaration-clause, the
        //   parameter pack is a function parameter pack (14.5.3). The type T
@@ -31504,7 +31672,7 @@ Index: lib/Sema/SemaType.cpp
          T = Context.getPackExpansionType(T, None);
        }
        break;
-     case Declarator::TemplateParamContext:
+     case DeclaratorContext::TemplateParamContext:
        // C++0x [temp.param]p15:
        //   If a template-parameter is a [...] is a parameter-declaration that
        //   declares a parameter pack (8.3.5), then the template-parameter is a
@@ -31522,27 +31690,30 @@ Index: lib/Sema/SemaType.cpp
                   : diag::ext_variadic_templates);
        break;
  
-     case Declarator::FileContext:
-     case Declarator::KNRTypeListContext:
-     case Declarator::ObjCParameterContext:  // FIXME: special diagnostic here?
-     case Declarator::ObjCResultContext:     // FIXME: special diagnostic here?
-     case Declarator::TypeNameContext:
-     case Declarator::FunctionalCastContext:
-     case Declarator::CXXNewContext:
-     case Declarator::AliasDeclContext:
-     case Declarator::AliasTemplateContext:
-     case Declarator::MemberContext:
-     case Declarator::BlockContext:
-     case Declarator::ForContext:
-     case Declarator::InitStmtContext:
-     case Declarator::ConditionContext:
-     case Declarator::CXXCatchContext:
-     case Declarator::ObjCCatchContext:
-     case Declarator::BlockLiteralContext:
-     case Declarator::LambdaExprContext:
-     case Declarator::ConversionIdContext:
-     case Declarator::TrailingReturnContext:
-     case Declarator::TemplateTypeArgContext:
+     case DeclaratorContext::FileContext:
+     case DeclaratorContext::KNRTypeListContext:
+     case DeclaratorContext::ObjCParameterContext:  // FIXME: special diagnostic
+                                                    // here?
+     case DeclaratorContext::ObjCResultContext:     // FIXME: special diagnostic
+                                                    // here?
+     case DeclaratorContext::TypeNameContext:
+     case DeclaratorContext::FunctionalCastContext:
+     case DeclaratorContext::CXXNewContext:
+     case DeclaratorContext::AliasDeclContext:
+     case DeclaratorContext::AliasTemplateContext:
+     case DeclaratorContext::MemberContext:
+     case DeclaratorContext::BlockContext:
+     case DeclaratorContext::ForContext:
+     case DeclaratorContext::InitStmtContext:
+     case DeclaratorContext::ConditionContext:
+     case DeclaratorContext::CXXCatchContext:
+     case DeclaratorContext::ObjCCatchContext:
+     case DeclaratorContext::BlockLiteralContext:
+     case DeclaratorContext::LambdaExprContext:
+     case DeclaratorContext::ConversionIdContext:
+     case DeclaratorContext::TrailingReturnContext:
+     case DeclaratorContext::TrailingReturnVarContext:
+     case DeclaratorContext::TemplateTypeArgContext:
        // FIXME: We may want to allow parameter packs in block-literal contexts
        // in the future.
        S.Diag(D.getEllipsisLoc(),
@@ -32231,9 +32402,9 @@ Index: lib/Sema/SemaType.cpp
    // to apply them to the actual parameter declaration.
    // Likewise, we don't want to do this for alias declarations, because
    // we are actually going to build a declaration from this eventually.
-   if (D.getContext() != Declarator::ObjCParameterContext &&
-       D.getContext() != Declarator::AliasDeclContext &&
-       D.getContext() != Declarator::AliasTemplateContext)
+   if (D.getContext() != DeclaratorContext::ObjCParameterContext &&
+       D.getContext() != DeclaratorContext::AliasDeclContext &&
+       D.getContext() != DeclaratorContext::AliasTemplateContext)
      checkUnusedDeclAttributes(D);
  
    if (getLangOpts().CPlusPlus) {
@@ -33660,7 +33831,7 @@ Index: lib/Sema/SemaType.cpp
        IsFuncReturnType || IsFuncType ||
        // Do not deduce addr space for member types of struct, except the pointee
        // type of a pointer member type.
-       (D.getContext() == Declarator::MemberContext && !IsPointee) ||
+       (D.getContext() == DeclaratorContext::MemberContext && !IsPointee) ||
        // Do not deduce addr space for types used to define a typedef and the
        // typedef itself, except the pointee type of a pointer type which is used
        // to define the typedef.
@@ -33692,7 +33863,7 @@ Index: lib/Sema/SemaType.cpp
      if (IsPointee) {
        ImpAddr = LangAS::opencl_generic;
      } else {
-       if (D.getContext() == Declarator::FileContext) {
+       if (D.getContext() == DeclaratorContext::FileContext) {
          ImpAddr = LangAS::opencl_global;
        } else {
          if (D.getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static ||
@@ -33887,31 +34058,29 @@ Index: lib/Sema/SemaType.cpp
    if (DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E->IgnoreParens())) {
      if (VarDecl *Var = dyn_cast<VarDecl>(DRE->getDecl())) {
        if (isTemplateInstantiation(Var->getTemplateSpecializationKind())) {
-         SourceLocation PointOfInstantiation = E->getExprLoc();
+         auto *Def = Var->getDefinition();
+         if (!Def) {
+           SourceLocation PointOfInstantiation = E->getExprLoc();
+           InstantiateVariableDefinition(PointOfInstantiation, Var);
+           Def = Var->getDefinition();
  
-         if (MemberSpecializationInfo *MSInfo =
-                 Var->getMemberSpecializationInfo()) {
-           // If we don't already have a point of instantiation, this is it.
-           if (MSInfo->getPointOfInstantiation().isInvalid()) {
-             MSInfo->setPointOfInstantiation(PointOfInstantiation);
- 
-             // This is a modification of an existing AST node. Notify
-             // listeners.
-             if (ASTMutationListener *L = getASTMutationListener())
-               L->StaticDataMemberInstantiated(Var);
+           // If we don't already have a point of instantiation, and we managed
+           // to instantiate a definition, this is the point of instantiation.
+           // Otherwise, we don't request an end-of-TU instantiation, so this is
+           // not a point of instantiation.
+           // FIXME: Is this really the right behavior?
+           if (Var->getPointOfInstantiation().isInvalid() && Def) {
+             assert(Var->getTemplateSpecializationKind() ==
+                        TSK_ImplicitInstantiation &&
+                    "explicit instantiation with no point of instantiation");
+             Var->setTemplateSpecializationKind(
+                 Var->getTemplateSpecializationKind(), PointOfInstantiation);
            }
-         } else {
-           VarTemplateSpecializationDecl *VarSpec =
-               cast<VarTemplateSpecializationDecl>(Var);
-           if (VarSpec->getPointOfInstantiation().isInvalid())
-             VarSpec->setPointOfInstantiation(PointOfInstantiation);
          }
  
-         InstantiateVariableDefinition(PointOfInstantiation, Var);
- 
-         // Update the type to the newly instantiated definition's type both
-         // here and within the expression.
-         if (VarDecl *Def = Var->getDefinition()) {
+         // Update the type to the definition's type both here and within the
+         // expression.
+         if (Def) {
            DRE->setDecl(Def);
            QualType T = Def->getType();
            DRE->setType(T);
@@ -34589,7 +34758,7 @@ Index: test/Templight/templight-deduced-func.cpp
 ===================================================================
 --- test/Templight/templight-deduced-func.cpp	(nonexistent)
 +++ test/Templight/templight-deduced-func.cpp	(working copy)
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,44 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <class T>
@@ -34599,40 +34768,46 @@ Index: test/Templight/templight-deduced-func.cpp
 +// CHECK: {{^name:[ ]+foo$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+28]]{{:12'$}}
++// CHECK: {{^orig:[ ]+'.*templight-deduced-func.cpp:4:5'}}
++// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:44:12'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+foo$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+23]]{{:12'$}}
++// CHECK: {{^orig:[ ]+'.*templight-deduced-func.cpp:4:5'}}
++// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:44:12'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+17]]{{:12'$}}
++// CHECK: {{^orig:[ ]+'.*templight-deduced-func.cpp:4:5'}}
++// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:44:12'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+12]]{{:12'$}}
++// CHECK: {{^orig:[ ]+'.*templight-deduced-func.cpp:4:5'}}
++// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:44:12'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+6]]{{:12'$}}
++// CHECK: {{^orig:[ ]+'.*templight-deduced-func.cpp:4:5'}}
++// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:44:12'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:}}[[@LINE+1]]{{:12'$}}
++// CHECK: {{^orig:[ ]+'.*templight-deduced-func.cpp:4:5'}}
++// CHECK: {{^poi:[ ]+'.*templight-deduced-func.cpp:44:12'$}}
 +int gvar = foo(0);
 Index: test/Templight/templight-default-arg-inst.cpp
 ===================================================================
 --- test/Templight/templight-default-arg-inst.cpp	(nonexistent)
 +++ test/Templight/templight-default-arg-inst.cpp	(working copy)
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,82 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template<class T, class U = T>
 +class A {};
@@ -34641,73 +34816,85 @@ Index: test/Templight/templight-default-arg-inst.cpp
 +// CHECK: {{^name:[ ]+'A::U'$}}
 +// CHECK: {{^kind:[ ]+DefaultTemplateArgumentInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+61]]{{:1'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:2:25'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:1'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A::U'$}}
 +// CHECK: {{^kind:[ ]+DefaultTemplateArgumentInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+56]]{{:1'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:2:25'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:1'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A::U'$}}
 +// CHECK: {{^kind:[ ]+DefaultTemplateArgumentChecking$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+50]]{{:6'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:2:25'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A::U'$}}
 +// CHECK: {{^kind:[ ]+DefaultTemplateArgumentChecking$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+45]]{{:6'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:2:25'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:6'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+39]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+34]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+28]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+23]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+17]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+12]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+6]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int, int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:}}[[@LINE+1]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-arg-inst.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-arg-inst.cpp:82:8'$}}
 +A<int> a;
 Index: test/Templight/templight-default-func-arg.cpp
 ===================================================================
 --- test/Templight/templight-default-func-arg.cpp	(nonexistent)
 +++ test/Templight/templight-default-func-arg.cpp	(working copy)
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,73 @@
 +// RUN: %clang_cc1 -std=c++14 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T>
 +void foo(T b = 0) {};
@@ -34719,63 +34906,73 @@ Index: test/Templight/templight-default-func-arg.cpp
 +// CHECK: {{^name:[ ]+foo$}}
 +// CHECK: {{^kind:[ ]+ExplicitTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+50]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+foo$}}
 +// CHECK: {{^kind:[ ]+ExplicitTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+45]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+foo$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+39]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+foo$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+34]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+28]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+23]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+b$}}
 +// CHECK: {{^kind:[ ]+DefaultFunctionArgumentInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+17]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:12'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+b$}}
 +// CHECK: {{^kind:[ ]+DefaultFunctionArgumentInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+12]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:12'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+6]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:}}[[@LINE+1]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-func-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-func-arg.cpp:72:3'$}}
 +  foo<int>();
 +}
 Index: test/Templight/templight-default-template-arg.cpp
 ===================================================================
 --- test/Templight/templight-default-template-arg.cpp	(nonexistent)
 +++ test/Templight/templight-default-template-arg.cpp	(working copy)
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,69 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T = int>
 +class A {};
@@ -34784,62 +34981,72 @@ Index: test/Templight/templight-default-template-arg.cpp
 +// CHECK: {{^name:[ ]+'A::T'$}}
 +// CHECK: {{^kind:[ ]+DefaultTemplateArgumentChecking$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+50]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:2:17'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A::T'$}}
 +// CHECK: {{^kind:[ ]+DefaultTemplateArgumentChecking$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+45]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:2:17'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+39]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+34]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+28]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+23]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+17]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+12]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+6]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'A<int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:}}[[@LINE+1]]{{:5'$}}
++// CHECK: {{^orig:[ ]+'.*templight-default-template-arg.cpp:3:7'}}
++// CHECK: {{^poi:[ ]+'.*templight-default-template-arg.cpp:69:5'$}}
 +A<> a;
 Index: test/Templight/templight-exception-spec-func.cpp
 ===================================================================
 --- test/Templight/templight-exception-spec-func.cpp	(nonexistent)
 +++ test/Templight/templight-exception-spec-func.cpp	(working copy)
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,73 @@
 +// RUN: %clang_cc1 -templight-dump -std=c++14 %s 2>&1 | FileCheck %s
 +template <bool B>
 +void f() noexcept(B) {}
@@ -34851,63 +35058,73 @@ Index: test/Templight/templight-exception-spec-func.cpp
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+ExplicitTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+50]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+ExplicitTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+45]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+39]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+34]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<false>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+28]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<false>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+23]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<false>'$}}
 +// CHECK: {{^kind:[ ]+ExceptionSpecInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+17]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<false>'$}}
 +// CHECK: {{^kind:[ ]+ExceptionSpecInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+12]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<false>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+6]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<false>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:}}[[@LINE+1]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-exception-spec-func.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-exception-spec-func.cpp:72:3'$}}
 +  f<false>();
 +}
 Index: test/Templight/templight-explicit-template-arg.cpp
 ===================================================================
 --- test/Templight/templight-explicit-template-arg.cpp	(nonexistent)
 +++ test/Templight/templight-explicit-template-arg.cpp	(working copy)
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,59 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template <class T>
 +void f(){}
@@ -34918,52 +35135,60 @@ Index: test/Templight/templight-explicit-template-arg.cpp
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+ExplicitTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+39]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+ExplicitTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+34]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+28]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+f$}}
 +// CHECK: {{^kind:[ ]+DeducedTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+23]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+17]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+12]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+6]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'f<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:}}[[@LINE+1]]{{:3'$}}
++// CHECK: {{^orig:[ ]+'.*templight-explicit-template-arg.cpp:3:6'}}
++// CHECK: {{^poi:[ ]+'.*templight-explicit-template-arg.cpp:58:3'$}}
 +  f<int>();
 +}
 Index: test/Templight/templight-memoization.cpp
 ===================================================================
 --- test/Templight/templight-memoization.cpp	(nonexistent)
 +++ test/Templight/templight-memoization.cpp	(working copy)
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,42 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <class T>
@@ -34973,12 +35198,14 @@ Index: test/Templight/templight-memoization.cpp
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+6]]{{:10'$}}
++// CHECK: {{^orig:[ ]+'.*templight-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:41:10'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+1]]{{:10'$}}
++// CHECK: {{^orig:[ ]+'.*templight-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:41:10'$}}
 +foo<int> x;
 +
 +// CHECK-LABEL: {{^---$}}
@@ -34994,19 +35221,21 @@ Index: test/Templight/templight-memoization.cpp
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+6]]{{:10'$}}
++// CHECK: {{^orig:[ ]+'.*templight-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:41:10'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:}}[[@LINE+1]]{{:10'$}}
++// CHECK: {{^orig:[ ]+'.*templight-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:41:10'$}}
 +foo<int> y;
 +
 Index: test/Templight/templight-nested-memoization.cpp
 ===================================================================
 --- test/Templight/templight-nested-memoization.cpp	(nonexistent)
 +++ test/Templight/templight-nested-memoization.cpp	(working copy)
-@@ -0,0 +1,150 @@
+@@ -0,0 +1,174 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <int N>
@@ -35031,137 +35260,161 @@ Index: test/Templight/templight-nested-memoization.cpp
 +// CHECK: {{^name:[ ]+'fib<4>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+124]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:173:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<4>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+119]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:173:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<4>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+114]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:173:8'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:16:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:16:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<0>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:10:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<0>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:10:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:16:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:16:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<3>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:28'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'fib<2>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:6:46'$}}
 +// CHECK-LABEL: {{^---$}}
 +//
 +// CHECK: {{^name:[ ]+'fib<4>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:}}[[@LINE+1]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-memoization.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-memoization.cpp:173:8'$}}
 +fib<4> x;
 +
 Index: test/Templight/templight-nested-template-instantiation.cpp
 ===================================================================
 --- test/Templight/templight-nested-template-instantiation.cpp	(nonexistent)
 +++ test/Templight/templight-nested-template-instantiation.cpp	(working copy)
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,84 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <int N>
@@ -35174,71 +35427,83 @@ Index: test/Templight/templight-nested-template-instantiation.cpp
 +// CHECK: {{^name:[ ]+'foo<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+59]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:84:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+54]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:84:8'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+49]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:84:8'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<0>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<0>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<1>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<2>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:}}[[@LINE+1]]{{:8'$}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:84:8'$}}
 +foo<2> x;
 Index: test/Templight/templight-one-instantiation.cpp
 ===================================================================
 --- test/Templight/templight-one-instantiation.cpp	(nonexistent)
 +++ test/Templight/templight-one-instantiation.cpp	(working copy)
-@@ -0,0 +1,16 @@
+@@ -0,0 +1,18 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +
 +template <class T>
@@ -35248,18 +35513,20 @@ Index: test/Templight/templight-one-instantiation.cpp
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:}}[[@LINE+6]]{{:10'$}}
++// CHECK: {{^orig:[ ]+'.*templight-one-instantiation.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:18:10'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:}}[[@LINE+1]]{{:10'$}}
++// CHECK: {{^orig:[ ]+'.*templight-one-instantiation.cpp:4:8'}}
++// CHECK: {{^poi:[ ]+'.*templight-one-instantiation.cpp:18:10'$}}
 +foo<int> x;
 Index: test/Templight/templight-prior-template-arg.cpp
 ===================================================================
 --- test/Templight/templight-prior-template-arg.cpp	(nonexistent)
 +++ test/Templight/templight-prior-template-arg.cpp	(working copy)
-@@ -0,0 +1,62 @@
+@@ -0,0 +1,72 @@
 +// RUN: %clang_cc1 -templight-dump %s 2>&1 | FileCheck %s
 +template<class T>
 +class A {};
@@ -35271,54 +35538,64 @@ Index: test/Templight/templight-prior-template-arg.cpp
 +// CHECK: {{^name:[ ]+'B::Outer'$}}
 +// CHECK: {{^kind:[ ]+PriorTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:5:40'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+50]]{{:1'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B::Outer'$}}
 +// CHECK: {{^kind:[ ]+PriorTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:5:40'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+45]]{{:1'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+39]]{{:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+34]]{{:6'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+28]]{{:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+23]]{{:6'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+17]]{{:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+12]]{{:6'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+6]]{{:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
++// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
 +// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+1]]{{:6'$}}
 +B<A> b;
