@@ -27,7 +27,6 @@ add_clang_executable(templight
   )
 
 target_link_libraries(templight
-  PRIVATE
   clangBasic
   clangFrontend
   clangFrontendTool
