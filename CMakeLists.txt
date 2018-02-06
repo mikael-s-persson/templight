@@ -71,7 +71,7 @@ install(SCRIPT templight_symlink.cmake -DCMAKE_INSTALL_PREFIX=\"${CMAKE_INSTALL_
 
 # Configure plist creation for OS X.
 set (TOOL_INFO_PLIST "Info.plist" CACHE STRING "Plist name")
-if (APPLE)  
+if (APPLE)
   if (CLANG_VENDOR)
     set(TOOL_INFO_NAME "${CLANG_VENDOR} templight")
   else()
@@ -84,13 +84,12 @@ if (APPLE)
     set(TOOL_INFO_BUILD_VERSION
       "${LLVM_SUBMIT_VERSION}.${LLVM_SUBMIT_SUBVERSION}")
   endif()
-  
+
   set(TOOL_INFO_PLIST_OUT "${CMAKE_CURRENT_BINARY_DIR}/${TOOL_INFO_PLIST}")
   target_link_libraries(templight
-    PRIVATE
     "-Wl,-sectcreate,__TEXT,__info_plist,${TOOL_INFO_PLIST_OUT}")
   configure_file("${TOOL_INFO_PLIST}.in" "${TOOL_INFO_PLIST_OUT}" @ONLY)
-  
+
   set(TOOL_INFO_UTI)
   set(TOOL_INFO_NAME)
   set(TOOL_INFO_VERSION)
@@ -98,14 +97,14 @@ if (APPLE)
 endif()
 
 if(CLANG_ORDER_FILE)
-  target_link_libraries(templight PRIVATE "-Wl,-order_file,${CLANG_ORDER_FILE}")
+  target_link_libraries(templight "-Wl,-order_file,${CLANG_ORDER_FILE}")
 endif()
 
 if(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
-  target_link_libraries(templight PRIVATE Polly)
+  target_link_libraries(templight Polly)
   if(POLLY_LINK_LIBS)
     foreach(lib ${POLLY_LINK_LIBS})
-      target_link_libraries(templight PRIVATE ${lib})
+      target_link_libraries(templight ${lib})
     endforeach(lib)
   endif(POLLY_LINK_LIBS)
 endif(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
