@@ -82,7 +82,7 @@ Index: include/clang/Sema/Sema.h
        /// member).
        DefiningSynthesizedFunction,
 +
-+      /// Added for Template instantiation observation
++      /// Added for Template instantiation observation.
 +      /// Memoization means we are _not_ instantiating a template because
 +      /// it is already instantiated (but we entered a context where we
 +      /// would have had to if it was not already instantiated).
@@ -135,7 +135,7 @@ Index: include/clang/Sema/TemplateInstCallback.h
 +/// template instantiation.
 +class TemplateInstantiationCallback {
 +public:
-+  virtual ~TemplateInstantiationCallback() {}
++  virtual ~TemplateInstantiationCallback() = default;
 +
 +  /// \brief Called before doing AST-parsing.
 +  virtual void initialize(const Sema &TheSema) = 0;
@@ -218,7 +218,7 @@ Index: lib/Frontend/FrontendActions.cpp
 ===================================================================
 --- lib/Frontend/FrontendActions.cpp	(revision 324194)
 +++ lib/Frontend/FrontendActions.cpp	(working copy)
-@@ -18,17 +18,37 @@
+@@ -18,17 +18,36 @@
  #include "clang/Lex/HeaderSearch.h"
  #include "clang/Lex/Preprocessor.h"
  #include "clang/Lex/PreprocessorOptions.h"
@@ -230,7 +230,6 @@ Index: lib/Frontend/FrontendActions.cpp
  #include "llvm/Support/Path.h"
  #include "llvm/Support/raw_ostream.h"
 +#include "llvm/Support/YAMLTraits.h"
-+#include <iostream>
  #include <memory>
  #include <system_error>
  
@@ -256,7 +255,7 @@ Index: lib/Frontend/FrontendActions.cpp
  //===----------------------------------------------------------------------===//
  // Custom Actions
  //===----------------------------------------------------------------------===//
-@@ -262,6 +282,140 @@
+@@ -262,6 +281,140 @@
  }
  
  namespace {
@@ -294,12 +293,12 @@ Index: lib/Frontend/FrontendActions.cpp
 +
 +  virtual void atTemplateBegin(const Sema &TheSema,
 +                               const CodeSynthesisContext &Inst) override {
-+    DisplayTemplightEntry<true>(std::cout, TheSema, Inst);
++    displayTemplightEntry<true>(llvm::outs(), TheSema, Inst);
 +  }
 +
 +  virtual void atTemplateEnd(const Sema &TheSema,
 +                             const CodeSynthesisContext &Inst) override {
-+    DisplayTemplightEntry<false>(std::cout, TheSema, Inst);
++    displayTemplightEntry<false>(llvm::outs(), TheSema, Inst);
 +  }
 +
 +private:
@@ -332,14 +331,14 @@ Index: lib/Frontend/FrontendActions.cpp
 +  }
 +
 +  template <bool BeginInstantiation>
-+  static void DisplayTemplightEntry(std::ostream &Out, const Sema &TheSema,
++  static void displayTemplightEntry(llvm::raw_ostream &Out, const Sema &TheSema,
 +                                    const CodeSynthesisContext &Inst) {
 +    std::string YAML;
 +    {
 +      llvm::raw_string_ostream OS(YAML);
 +      llvm::yaml::Output YO(OS);
 +      TemplightEntry Entry =
-+          GetTemplightEntry<BeginInstantiation>(TheSema, Inst);
++          getTemplightEntry<BeginInstantiation>(TheSema, Inst);
 +      llvm::yaml::EmptyContext Context;
 +      llvm::yaml::yamlize(YO, Entry, true, Context);
 +    }
@@ -347,12 +346,12 @@ Index: lib/Frontend/FrontendActions.cpp
 +  }
 +
 +  template <bool BeginInstantiation>
-+  static TemplightEntry GetTemplightEntry(const Sema &TheSema,
++  static TemplightEntry getTemplightEntry(const Sema &TheSema,
 +                                          const CodeSynthesisContext &Inst) {
 +    TemplightEntry Entry;
 +    Entry.Kind = toString(Inst.Kind);
 +    Entry.Event = BeginInstantiation ? "Begin" : "End";
-+    if (NamedDecl *NamedTemplate = dyn_cast_or_null<NamedDecl>(Inst.Entity)) {
++    if (auto *NamedTemplate = dyn_cast_or_null<NamedDecl>(Inst.Entity)) {
 +      llvm::raw_string_ostream OS(Entry.Name);
 +      NamedTemplate->getNameForDiagnostic(OS, TheSema.getLangOpts(), true);
 +      const PresumedLoc DefLoc = 
@@ -441,7 +440,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
    return Success;
  }
 +
-+}
++} //namespace
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
 --- lib/Parse/ParseAST.cpp	(revision 324194)
@@ -503,17 +502,18 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
  
  using namespace clang;
  using namespace sema;
-@@ -199,6 +200,9 @@
+@@ -199,6 +200,10 @@
    case DeclaringSpecialMember:
    case DefiningSynthesizedFunction:
      return false;
 +       
++  // This function should never be called when Kind's value is Memoization.
 +  case Memoization:
 +    break;
    }
  
    llvm_unreachable("Invalid SynthesisKind!");
-@@ -235,6 +239,7 @@
+@@ -235,6 +240,7 @@
          !SemaRef.InstantiatingSpecializations
               .insert(std::make_pair(Inst.Entity->getCanonicalDecl(), Inst.Kind))
               .second;
@@ -521,7 +521,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
    }
  }
  
-@@ -394,8 +399,10 @@
+@@ -394,8 +400,10 @@
            std::make_pair(Active.Entity, Active.Kind));
      }
  
@@ -533,7 +533,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
      Invalid = true;
    }
  }
-@@ -626,7 +633,7 @@
+@@ -626,7 +634,7 @@
          << cast<CXXRecordDecl>(Active->Entity) << Active->SpecialMember;
        break;
  
@@ -542,7 +542,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
        // FIXME: For synthesized members other than special members, produce a note.
        auto *MD = dyn_cast<CXXMethodDecl>(Active->Entity);
        auto CSM = MD ? getSpecialMember(MD) : CXXInvalid;
-@@ -635,6 +642,9 @@
+@@ -635,6 +643,9 @@
                       diag::note_member_synthesized_at)
            << CSM << Context.getTagDeclType(MD->getParent());
        }
@@ -552,7 +552,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
        break;
      }
    }
-@@ -682,6 +692,9 @@
+@@ -682,6 +693,9 @@
        // This happens in a context unrelated to template instantiation, so
        // there is no SFINAE.
        return None;
@@ -1057,13 +1057,13 @@ Index: test/Templight/templight-memoization.cpp
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^orig:[ ]+'.*templight-memoization.cpp:4:8'}}
-+// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:41:10'$}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:18:10'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<int>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^orig:[ ]+'.*templight-memoization.cpp:4:8'}}
-+// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:41:10'$}}
++// CHECK: {{^poi:[ ]+'.*templight-memoization.cpp:18:10'$}}
 +foo<int> x;
 +
 +// CHECK-LABEL: {{^---$}}
@@ -1323,13 +1323,13 @@ Index: test/Templight/templight-nested-template-instantiation.cpp
 +// CHECK: {{^name:[ ]+'foo<0>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
-+// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:7:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'foo<0>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
-+// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:4:8'}}
++// CHECK: {{^orig:[ ]+'.*templight-nested-template-instantiation.cpp:7:8'}}
 +// CHECK: {{^poi:[ ]+'.*templight-nested-template-instantiation.cpp:4:14'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
@@ -1397,63 +1397,63 @@ Index: test/Templight/templight-prior-template-arg.cpp
 +// CHECK: {{^kind:[ ]+PriorTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:5:40'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+50]]{{:1'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:1'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B::Outer'$}}
 +// CHECK: {{^kind:[ ]+PriorTemplateArgumentSubstitution$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:5:40'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+45]]{{:1'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:1'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+39]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+34]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+28]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+TemplateInstantiation$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+23]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+17]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+12]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +//
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+Begin$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+6]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +// CHECK-LABEL: {{^---$}}
 +// CHECK: {{^name:[ ]+'B<A>'$}}
 +// CHECK: {{^kind:[ ]+Memoization$}}
 +// CHECK: {{^event:[ ]+End$}}
 +// CHECK: {{^orig:[ ]+'.*templight-prior-template-arg.cpp:6:7'}}
-+// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:}}[[@LINE+1]]{{:6'$}}
++// CHECK: {{^poi:[ ]+'.*templight-prior-template-arg.cpp:72:6'$}}
 +B<A> b;
