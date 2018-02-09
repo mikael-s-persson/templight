@@ -440,7 +440,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
    return Success;
  }
 +
-+} //namespace
++} //namespace clang 
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
 --- lib/Parse/ParseAST.cpp	(revision 324194)
@@ -542,17 +542,18 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
        // FIXME: For synthesized members other than special members, produce a note.
        auto *MD = dyn_cast<CXXMethodDecl>(Active->Entity);
        auto CSM = MD ? getSpecialMember(MD) : CXXInvalid;
-@@ -635,6 +643,9 @@
-                      diag::note_member_synthesized_at)
-           << CSM << Context.getTagDeclType(MD->getParent());
+@@ -637,6 +645,10 @@
        }
-+    }
-+
-+    case CodeSynthesisContext::Memoization:
        break;
      }
++
++    case CodeSynthesisContext::Memoization:
++      break;
++    }
    }
-@@ -682,6 +693,9 @@
+ }
+ 
+@@ -682,6 +694,9 @@
        // This happens in a context unrelated to template instantiation, so
        // there is no SFINAE.
        return None;
