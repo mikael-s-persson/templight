@@ -16437,7 +16437,7 @@ Index: lib/FrontendTool/ExecuteCompilerInvocation.cpp
    return Success;
  }
 +
-+} //namespace
++} //namespace clang 
 Index: lib/Parse/ParseAST.cpp
 ===================================================================
 --- lib/Parse/ParseAST.cpp	(revision 324194)
@@ -18481,7 +18481,7 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
 ===================================================================
 --- lib/Sema/SemaTemplateInstantiate.cpp	(revision 324194)
 +++ lib/Sema/SemaTemplateInstantiate.cpp	(working copy)
-@@ -1,2988 +1,3002 @@
+@@ -1,2988 +1,3003 @@
  //===------- SemaTemplateInstantiate.cpp - C++ Template Instantiation ------===/
  //
  //                     The LLVM Compiler Infrastructure
@@ -19129,11 +19129,12 @@ Index: lib/Sema/SemaTemplateInstantiate.cpp
                       diag::note_member_synthesized_at)
            << CSM << Context.getTagDeclType(MD->getParent());
        }
-+    }
-+
-+    case CodeSynthesisContext::Memoization:
        break;
      }
++
++    case CodeSynthesisContext::Memoization:
++      break;
++    }
    }
  }
  
