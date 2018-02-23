@@ -62,14 +62,14 @@ Templight must be compiled from source, alongside the Clang source code.
   $ git clone <link-to-clone-templight-github-repo> templight
 ```
 
-4. Add the `templight` subdirectory to CMake:
+3. Add the `templight` subdirectory to CMake:
 ```bash
   (from top-level folder)
   $ cd llvm/tools/clang/tools
   $ echo "add_clang_subdirectory(templight)" >> CMakeLists.txt
 ```
 
-5. (Re-)Compile LLVM / Clang: (same as the corresponding step in LLVM/Clang instructions)
+4. (Re-)Compile LLVM / Clang: (same as the corresponding step in LLVM/Clang instructions)
 ```bash
   (from top-level folder)
   $ mkdir build
@@ -78,7 +78,7 @@ Templight must be compiled from source, alongside the Clang source code.
   $ make
 ```
 
-6. If successful, there should be templight executables in the build/bin folder.
+5. If successful, there should be a `templight` and a `templight++` executable in the build/bin folder.
 
 
 ### Invoking Templight
