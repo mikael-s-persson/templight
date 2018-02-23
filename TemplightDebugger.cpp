@@ -369,8 +369,8 @@ public:
   void LookupInDeclContext(DeclContext* decl, bool shouldGoUp = false) {
     DeclContext* cur_decl = decl;
     while(cur_decl) {
-      for(DeclContext::all_lookups_iterator it = cur_decl->lookups_begin(), 
-          it_end = cur_decl->lookups_end(); it != it_end; ++it) {
+      for(DeclContext::all_lookups_iterator it = cur_decl->lookups().begin(), 
+          it_end = cur_decl->lookups().end(); it != it_end; ++it) {
         if(QueryReg.match(it.getLookupName().getAsString())) {
           for(DeclContext::lookup_result::iterator ri = (*it).begin(), 
               ri_end = (*it).end(); ri != ri_end; ++ri) {
