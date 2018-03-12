@@ -1,8 +1,8 @@
 diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
-index f867218..a84c0c8 100644
+index 97c996d..e0b6e6f 100644
 --- a/include/clang/Driver/CC1Options.td
 +++ b/include/clang/Driver/CC1Options.td
-@@ -1,843 +1,845 @@
+@@ -1,841 +1,843 @@
  //===--- CC1Options.td - Options for clang -cc1 ---------------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -714,8 +714,6 @@ index f867218..a84c0c8 100644
    HelpText<"Allow Objective-C array and dictionary subscripting in legacy runtime">;
  def vtordisp_mode_EQ : Joined<["-"], "vtordisp-mode=">,
    HelpText<"Control vtordisp placement on win32 targets">;
- def fno_rtti_data : Flag<["-"], "fno-rtti-data">,
-   HelpText<"Control emission of RTTI data">;
  def fnative_half_type: Flag<["-"], "fnative-half-type">,
    HelpText<"Use the native half type for __fp16 instead of promoting to float">;
  def fnative_half_arguments_and_returns : Flag<["-"], "fnative-half-arguments-and-returns">,
@@ -1215,10 +1213,10 @@ index c609500..af3a22b 100644
  
  #endif
 diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
-index 3bdc116..571928a 100644
+index 23f3c8f..2259c94 100644
 --- a/lib/Frontend/CompilerInvocation.cpp
 +++ b/lib/Frontend/CompilerInvocation.cpp
-@@ -1,3054 +1,3055 @@
+@@ -1,3070 +1,3071 @@
  //===--- CompilerInvocation.cpp -------------------------------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -1766,6 +1764,7 @@ index 3bdc116..571928a 100644
    Opts.DebugTypeExtRefs = Args.hasArg(OPT_dwarf_ext_refs);
    Opts.DebugExplicitImport = Args.hasArg(OPT_dwarf_explicit_import);
    Opts.DebugFwdTemplateParams = Args.hasArg(OPT_debug_forward_template_params);
+   Opts.EmbedSource = Args.hasArg(OPT_gembed_source);
  
    for (const auto &Arg : Args.getAllArgValues(OPT_fdebug_prefix_map_EQ))
      Opts.DebugPrefixMap.insert(StringRef(Arg).split('='));
@@ -1860,6 +1859,8 @@ index 3bdc116..571928a 100644
    Opts.DisableFree = Args.hasArg(OPT_disable_free);
    Opts.DiscardValueNames = Args.hasArg(OPT_discard_value_names);
    Opts.DisableTailCalls = Args.hasArg(OPT_mdisable_tail_calls);
+   Opts.NoEscapingBlockTailCalls =
+       Args.hasArg(OPT_fno_escaping_block_tail_calls);
    Opts.FloatABI = Args.getLastArgValue(OPT_mfloat_abi);
    Opts.LessPreciseFPMAD = Args.hasArg(OPT_cl_mad_enable) ||
                            Args.hasArg(OPT_cl_unsafe_math_optimizations) ||
@@ -1880,6 +1881,8 @@ index 3bdc116..571928a 100644
    Opts.FlushDenorm = Args.hasArg(OPT_cl_denorms_are_zero);
    Opts.CorrectlyRoundedDivSqrt =
        Args.hasArg(OPT_cl_fp32_correctly_rounded_divide_sqrt);
+   Opts.UniformWGSize =
+       Args.hasArg(OPT_cl_uniform_work_group_size);
    Opts.Reciprocals = Args.getAllArgValues(OPT_mrecip_EQ);
    Opts.ReciprocalMath = Args.hasArg(OPT_freciprocal_math);
    Opts.NoTrappingMath = Args.hasArg(OPT_fno_trapping_math);
@@ -2142,6 +2145,8 @@ index 3bdc116..571928a 100644
      Opts.StackProbeSize = StackProbeSize;
    }
  
+   Opts.NoStackArgProbe = Args.hasArg(OPT_mno_stack_arg_probe);
+ 
    if (Arg *A = Args.getLastArg(OPT_fobjc_dispatch_method_EQ)) {
      StringRef Name = A->getValue();
      unsigned Method = llvm::StringSwitch<unsigned>(Name)
@@ -2158,8 +2163,12 @@ index 3bdc116..571928a 100644
      }
    }
  
-   Opts.EmulatedTLS =
-       Args.hasFlag(OPT_femulated_tls, OPT_fno_emulated_tls, false);
+   if (Args.getLastArg(OPT_femulated_tls) ||
+       Args.getLastArg(OPT_fno_emulated_tls)) {
+     Opts.ExplicitEmulatedTLS = true;
+     Opts.EmulatedTLS =
+         Args.hasFlag(OPT_femulated_tls, OPT_fno_emulated_tls, false);
+   }
  
    if (Arg *A = Args.getLastArg(OPT_ftlsmodel_EQ)) {
      StringRef Name = A->getValue();
@@ -2262,8 +2271,8 @@ index 3bdc116..571928a 100644
                        Args.getAllArgValues(OPT_fsanitize_trap_EQ), Diags,
                        Opts.SanitizeTrap);
  
-   Opts.CudaGpuBinaryFileNames =
-       Args.getAllArgValues(OPT_fcuda_include_gpubinary);
+   Opts.CudaGpuBinaryFileName =
+       Args.getLastArgValue(OPT_fcuda_include_gpubinary);
  
    Opts.Backchain = Args.hasArg(OPT_mbackchain);
  
@@ -3743,6 +3752,10 @@ index 3bdc116..571928a 100644
            << Opts.OMPHostIRFile;
    }
  
+   // set CUDA mode for OpenMP target NVPTX if specified in options
+   Opts.OpenMPCUDAMode = Opts.OpenMPIsDevice && T.isNVPTX() &&
+                         Args.hasArg(options::OPT_fopenmp_cuda_mode);
+ 
    // Record whether the __DEPRECATED define was requested.
    Opts.Deprecated = Args.hasFlag(OPT_fdeprecated_macro,
                                   OPT_fno_deprecated_macro,
@@ -3999,6 +4012,7 @@ index 3bdc116..571928a 100644
    if (Opts.Triple.empty())
      Opts.Triple = llvm::sys::getDefaultTargetTriple();
    Opts.OpenCLExtensionsAsWritten = Args.getAllArgValues(OPT_cl_ext_EQ);
+   Opts.ForceEnableInt128 = Args.hasArg(OPT_fforce_enable_int128);
  }
  
  bool CompilerInvocation::CreateFromArgs(CompilerInvocation &Res,
@@ -4275,10 +4289,10 @@ index 3bdc116..571928a 100644
  }
  } // end namespace clang
 diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 1eff566..505faf5 100644
+index 1eff566..6340a93 100644
 --- a/lib/Frontend/FrontendActions.cpp
 +++ b/lib/Frontend/FrontendActions.cpp
-@@ -1,756 +1,789 @@
+@@ -1,756 +1,802 @@
  //===--- FrontendActions.cpp ----------------------------------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -4569,7 +4583,7 @@ index 1eff566..505faf5 100644
    std::string Event;
    std::string DefinitionLocation;
    std::string PointOfInstantiation;
-+  std::chrono::high_resolution_clock::rep TimeStamp;
++  Optional<std::chrono::high_resolution_clock::rep> TimeStamp;
  };
  } // namespace
  
@@ -4595,29 +4609,48 @@ index 1eff566..505faf5 100644
  public:
    void initialize(const Sema &) override {}
  
-   void finalize(const Sema &) override {}
+-  void finalize(const Sema &) override {}
++  void finalize(const Sema &) override {
++    if(IsProfilingEnabled)
++      for(auto &Entry : TemplightEntries)
++        displayTemplightEntry(llvm::outs(), Entry);
++  }
  
    void atTemplateBegin(const Sema &TheSema,
                         const CodeSynthesisContext &Inst) override {
-     displayTemplightEntry<true>(llvm::outs(), TheSema, Inst);
+-    displayTemplightEntry<true>(llvm::outs(), TheSema, Inst);
++    TemplightEntry Entry = getTemplightEntry<true>(TheSema, Inst);
++
++    if(IsProfilingEnabled)
++      TemplightEntries.push_back(std::move(Entry));
++    else
++      displayTemplightEntry(llvm::outs(), Entry);
    }
  
    void atTemplateEnd(const Sema &TheSema,
                       const CodeSynthesisContext &Inst) override {
-     displayTemplightEntry<false>(llvm::outs(), TheSema, Inst);
-   }
-+  
-+  static void enableProfiling() {
-+    IsProfilingEnabled = true;
+-    displayTemplightEntry<false>(llvm::outs(), TheSema, Inst);
++    TemplightEntry Entry = getTemplightEntry<false>(TheSema, Inst);
++
++    if(IsProfilingEnabled)
++      TemplightEntries.push_back(std::move(Entry));
++    else
++      displayTemplightEntry(llvm::outs(), Entry);
 +  }
-+  static bool isProfilingEnabled() {
++  
++  void enableProfiling() {
++    IsProfilingEnabled = true;
+   }
++  bool isProfilingEnabled() {
 +    return IsProfilingEnabled;
 +  }
++
 +  static const std::chrono::time_point<std::chrono::high_resolution_clock> start;
  
  private:
 +
-+  static bool IsProfilingEnabled;
++  bool IsProfilingEnabled = false;
++  std::vector<TemplightEntry> TemplightEntries;
 +  
    static std::string toString(CodeSynthesisContext::SynthesisKind Kind) {
      switch (Kind) {
@@ -4647,15 +4680,17 @@ index 1eff566..505faf5 100644
      return "";
    }
  
-   template <bool BeginInstantiation>
-   static void displayTemplightEntry(llvm::raw_ostream &Out, const Sema &TheSema,
-                                     const CodeSynthesisContext &Inst) {
+-  template <bool BeginInstantiation>
+-  static void displayTemplightEntry(llvm::raw_ostream &Out, const Sema &TheSema,
+-                                    const CodeSynthesisContext &Inst) {
++  void displayTemplightEntry(llvm::raw_ostream &Out, 
++                                              TemplightEntry& Entry) {
      std::string YAML;
      {
        llvm::raw_string_ostream OS(YAML);
        llvm::yaml::Output YO(OS);
-       TemplightEntry Entry =
-           getTemplightEntry<BeginInstantiation>(TheSema, Inst);
+-      TemplightEntry Entry =
+-          getTemplightEntry<BeginInstantiation>(TheSema, Inst);
        llvm::yaml::EmptyContext Context;
        llvm::yaml::yamlize(YO, Entry, true, Context);
      }
@@ -4663,7 +4698,8 @@ index 1eff566..505faf5 100644
    }
  
    template <bool BeginInstantiation>
-   static TemplightEntry getTemplightEntry(const Sema &TheSema,
+-  static TemplightEntry getTemplightEntry(const Sema &TheSema,
++  TemplightEntry getTemplightEntry(const Sema &TheSema,
                                            const CodeSynthesisContext &Inst) {
      TemplightEntry Entry;
 +    if (IsProfilingEnabled){
@@ -4693,7 +4729,6 @@ index 1eff566..505faf5 100644
    }
  };
 +
-+bool DefaultTemplateInstCallback::IsProfilingEnabled = false;
 +const std::chrono::time_point<std::chrono::high_resolution_clock> 
 +  DefaultTemplateInstCallback::start = std::chrono::high_resolution_clock::now();
 +
@@ -4708,8 +4743,8 @@ index 1eff566..505faf5 100644
 +  io.mapRequired("event", fields.Event);
 +  io.mapRequired("orig", fields.DefinitionLocation);
 +  io.mapRequired("poi", fields.PointOfInstantiation);
-+  if(DefaultTemplateInstCallback::isProfilingEnabled())
-+    io.mapRequired("stamp", fields.TimeStamp);
++  if(fields.TimeStamp)
++    io.mapRequired("stamp", fields.TimeStamp.getValue());
 +}
 +} // namespace yaml
 +} // namespace llvm
@@ -4728,10 +4763,13 @@ index 1eff566..505faf5 100644
    // here so the source manager would be initialized.
    EnsureSemaIsCreated(CI, *this);
  
-   CI.getSema().TemplateInstCallbacks.push_back(
-       llvm::make_unique<DefaultTemplateInstCallback>());
+-  CI.getSema().TemplateInstCallbacks.push_back(
+-      llvm::make_unique<DefaultTemplateInstCallback>());
++  auto D = llvm::make_unique<DefaultTemplateInstCallback>();
 +  if(CI.getFrontendOpts().TemplightProfile)
-+    DefaultTemplateInstCallback::enableProfiling();
++    D->enableProfiling();
++  
++  CI.getSema().TemplateInstCallbacks.push_back(std::move(D));
    ASTFrontendAction::ExecuteAction();
  }
  
@@ -5075,3 +5113,46 @@ index 1eff566..505faf5 100644
      llvm::outs().write((*Buffer)->getBufferStart(), Preamble);
    }
  }
+diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
+index 9f76d36..541a2b7 100644
+--- a/tools/CMakeLists.txt
++++ b/tools/CMakeLists.txt
+@@ -1,37 +1,38 @@
+ create_subdirectory_options(CLANG TOOL)
+ 
+ add_clang_subdirectory(diagtool)
+ add_clang_subdirectory(driver)
+ add_clang_subdirectory(clang-diff)
+ add_clang_subdirectory(clang-format)
+ add_clang_subdirectory(clang-format-vs)
+ add_clang_subdirectory(clang-fuzzer)
+ add_clang_subdirectory(clang-import-test)
+ add_clang_subdirectory(clang-offload-bundler)
+ 
+ add_clang_subdirectory(c-index-test)
+ 
+ add_clang_subdirectory(clang-rename)
+ add_clang_subdirectory(clang-refactor)
+ 
+ if(CLANG_ENABLE_ARCMT)
+   add_clang_subdirectory(arcmt-test)
+   add_clang_subdirectory(c-arcmt-test)
+ endif()
+ 
+ if(CLANG_ENABLE_STATIC_ANALYZER)
+   add_clang_subdirectory(clang-check)
+   add_clang_subdirectory(clang-func-mapping)
+   add_clang_subdirectory(scan-build)
+   add_clang_subdirectory(scan-view)
+ endif()
+ 
+ # We support checking out the clang-tools-extra repository into the 'extra'
+ # subdirectory. It contains tools developed as part of the Clang/LLVM project
+ # on top of the Clang tooling platform. We keep them in a separate repository
+ # to keep the primary Clang repository small and focused.
+ # It also may be included by LLVM_EXTERNAL_CLANG_TOOLS_EXTRA_SOURCE_DIR.
+ add_llvm_external_project(clang-tools-extra extra)
+ 
+ # libclang may require clang-tidy in clang-tools-extra.
+ add_clang_subdirectory(libclang)
++add_clang_subdirectory(templight)

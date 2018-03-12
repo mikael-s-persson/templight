@@ -1,5 +1,5 @@
 diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
-index f867218..a84c0c8 100644
+index 97c996d..e0b6e6f 100644
 --- a/include/clang/Driver/CC1Options.td
 +++ b/include/clang/Driver/CC1Options.td
 @@ -503,6 +503,8 @@ def ftest_module_file_extension_EQ :
@@ -52,10 +52,10 @@ index c609500..af3a22b 100644
    {}
  
 diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
-index 3bdc116..571928a 100644
+index 23f3c8f..2259c94 100644
 --- a/lib/Frontend/CompilerInvocation.cpp
 +++ b/lib/Frontend/CompilerInvocation.cpp
-@@ -1449,6 +1449,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+@@ -1460,6 +1460,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
    Opts.ModulesEmbedFiles = Args.getAllArgValues(OPT_fmodules_embed_file_EQ);
    Opts.ModulesEmbedAllFiles = Args.hasArg(OPT_fmodules_embed_all_files);
    Opts.IncludeTimestamps = !Args.hasArg(OPT_fno_pch_timestamp);
@@ -64,7 +64,7 @@ index 3bdc116..571928a 100644
    Opts.CodeCompleteOpts.IncludeMacros
      = Args.hasArg(OPT_code_completion_macros);
 diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 1eff566..505faf5 100644
+index 1eff566..6340a93 100644
 --- a/lib/Frontend/FrontendActions.cpp
 +++ b/lib/Frontend/FrontendActions.cpp
 @@ -26,6 +26,7 @@
@@ -79,7 +79,7 @@ index 1eff566..505faf5 100644
    std::string Event;
    std::string DefinitionLocation;
    std::string PointOfInstantiation;
-+  std::chrono::high_resolution_clock::rep TimeStamp;
++  Optional<std::chrono::high_resolution_clock::rep> TimeStamp;
  };
  } // namespace
  
@@ -97,28 +97,80 @@ index 1eff566..505faf5 100644
  };
  } // namespace yaml
  } // namespace llvm
-@@ -322,8 +318,19 @@ public:
-                      const CodeSynthesisContext &Inst) override {
-     displayTemplightEntry<false>(llvm::outs(), TheSema, Inst);
-   }
-+  
-+  static void enableProfiling() {
-+    IsProfilingEnabled = true;
+@@ -311,19 +307,46 @@ class DefaultTemplateInstCallback : public TemplateInstantiationCallback {
+ public:
+   void initialize(const Sema &) override {}
+ 
+-  void finalize(const Sema &) override {}
++  void finalize(const Sema &) override {
++    if(IsProfilingEnabled)
++      for(auto &Entry : TemplightEntries)
++        displayTemplightEntry(llvm::outs(), Entry);
 +  }
-+  static bool isProfilingEnabled() {
+ 
+   void atTemplateBegin(const Sema &TheSema,
+                        const CodeSynthesisContext &Inst) override {
+-    displayTemplightEntry<true>(llvm::outs(), TheSema, Inst);
++    TemplightEntry Entry = getTemplightEntry<true>(TheSema, Inst);
++
++    if(IsProfilingEnabled)
++      TemplightEntries.push_back(std::move(Entry));
++    else
++      displayTemplightEntry(llvm::outs(), Entry);
+   }
+ 
+   void atTemplateEnd(const Sema &TheSema,
+                      const CodeSynthesisContext &Inst) override {
+-    displayTemplightEntry<false>(llvm::outs(), TheSema, Inst);
++    TemplightEntry Entry = getTemplightEntry<false>(TheSema, Inst);
++
++    if(IsProfilingEnabled)
++      TemplightEntries.push_back(std::move(Entry));
++    else
++      displayTemplightEntry(llvm::outs(), Entry);
++  }
++  
++  void enableProfiling() {
++    IsProfilingEnabled = true;
+   }
++  bool isProfilingEnabled() {
 +    return IsProfilingEnabled;
 +  }
++
 +  static const std::chrono::time_point<std::chrono::high_resolution_clock> start;
  
  private:
 +
-+  static bool IsProfilingEnabled;
++  bool IsProfilingEnabled = false;
++  std::vector<TemplightEntry> TemplightEntries;
 +  
    static std::string toString(CodeSynthesisContext::SynthesisKind Kind) {
      switch (Kind) {
      case CodeSynthesisContext::TemplateInstantiation:
-@@ -371,6 +378,10 @@ private:
-   static TemplightEntry getTemplightEntry(const Sema &TheSema,
+@@ -352,15 +375,12 @@ private:
+     return "";
+   }
+ 
+-  template <bool BeginInstantiation>
+-  static void displayTemplightEntry(llvm::raw_ostream &Out, const Sema &TheSema,
+-                                    const CodeSynthesisContext &Inst) {
++  void displayTemplightEntry(llvm::raw_ostream &Out, 
++                                              TemplightEntry& Entry) {
+     std::string YAML;
+     {
+       llvm::raw_string_ostream OS(YAML);
+       llvm::yaml::Output YO(OS);
+-      TemplightEntry Entry =
+-          getTemplightEntry<BeginInstantiation>(TheSema, Inst);
+       llvm::yaml::EmptyContext Context;
+       llvm::yaml::yamlize(YO, Entry, true, Context);
+     }
+@@ -368,9 +388,13 @@ private:
+   }
+ 
+   template <bool BeginInstantiation>
+-  static TemplightEntry getTemplightEntry(const Sema &TheSema,
++  TemplightEntry getTemplightEntry(const Sema &TheSema,
                                            const CodeSynthesisContext &Inst) {
      TemplightEntry Entry;
 +    if (IsProfilingEnabled){
@@ -128,12 +180,11 @@ index 1eff566..505faf5 100644
      Entry.Kind = toString(Inst.Kind);
      Entry.Event = BeginInstantiation ? "Begin" : "End";
      if (auto *NamedTemplate = dyn_cast_or_null<NamedDecl>(Inst.Entity)) {
-@@ -393,8 +404,28 @@ private:
+@@ -393,8 +417,27 @@ private:
      return Entry;
    }
  };
 +
-+bool DefaultTemplateInstCallback::IsProfilingEnabled = false;
 +const std::chrono::time_point<std::chrono::high_resolution_clock> 
 +  DefaultTemplateInstCallback::start = std::chrono::high_resolution_clock::now();
 +
@@ -148,8 +199,8 @@ index 1eff566..505faf5 100644
 +  io.mapRequired("event", fields.Event);
 +  io.mapRequired("orig", fields.DefinitionLocation);
 +  io.mapRequired("poi", fields.PointOfInstantiation);
-+  if(DefaultTemplateInstCallback::isProfilingEnabled())
-+    io.mapRequired("stamp", fields.TimeStamp);
++  if(fields.TimeStamp)
++    io.mapRequired("stamp", fields.TimeStamp.getValue());
 +}
 +} // namespace yaml
 +} // namespace llvm
@@ -157,12 +208,26 @@ index 1eff566..505faf5 100644
  std::unique_ptr<ASTConsumer>
  TemplightDumpAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
    return llvm::make_unique<ASTConsumer>();
-@@ -411,6 +442,8 @@ void TemplightDumpAction::ExecuteAction() {
+@@ -409,8 +452,11 @@ void TemplightDumpAction::ExecuteAction() {
+   // here so the source manager would be initialized.
+   EnsureSemaIsCreated(CI, *this);
  
-   CI.getSema().TemplateInstCallbacks.push_back(
-       llvm::make_unique<DefaultTemplateInstCallback>());
+-  CI.getSema().TemplateInstCallbacks.push_back(
+-      llvm::make_unique<DefaultTemplateInstCallback>());
++  auto D = llvm::make_unique<DefaultTemplateInstCallback>();
 +  if(CI.getFrontendOpts().TemplightProfile)
-+    DefaultTemplateInstCallback::enableProfiling();
++    D->enableProfiling();
++  
++  CI.getSema().TemplateInstCallbacks.push_back(std::move(D));
    ASTFrontendAction::ExecuteAction();
  }
  
+diff --git a/tools/CMakeLists.txt b/tools/CMakeLists.txt
+index 9f76d36..541a2b7 100644
+--- a/tools/CMakeLists.txt
++++ b/tools/CMakeLists.txt
+@@ -35,3 +35,4 @@ add_llvm_external_project(clang-tools-extra extra)
+ 
+ # libclang may require clang-tidy in clang-tools-extra.
+ add_clang_subdirectory(libclang)
++add_clang_subdirectory(templight)
