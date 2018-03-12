@@ -50,6 +50,8 @@ The debugger is enabled by the templight option `-debugger`, and it supports the
 
 ### Getting and Compiling Templight
 
+**NOTE**: This branch contains the source code for an earlier version of LLVM/Clang, and may not get updated.
+
 Templight must be compiled from source, alongside the Clang source code.
 
 1. Download the LLVM/Clang **5.0 release source code** from the official SVN repository.
@@ -64,6 +66,8 @@ Templight must be compiled from source, alongside the Clang source code.
   $ cd llvm/tools/clang/tools
   $ mkdir templight
   $ git clone <link-to-clone-templight-github-repo> templight
+  $ cd templight
+  $ git checkout release_50
 ```
 3. Apply the supplied patch to Clang's source code:
 ```bash  
