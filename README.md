@@ -50,34 +50,15 @@ The debugger is enabled by the templight option `-debugger`, and it supports the
 
 ### Getting and Compiling Templight
 
+**NOTE**: This branch contains the source code for an earlier version of LLVM/Clang, and may not get updated.
+
 Templight must be compiled from source, alongside the Clang source code.
 
-#### Getting the source code with the lastest svn trunk
-
-1. [Follow the instructions from LLVM/Clang](http://clang.llvm.org/get_started.html) to get a local copy of the **latest svn trunk** of the Clang source code. Cloning the official git repository should work just as well.
-
-2. Clone the templight repository into the clang directories, as follows:
+1. Download the LLVM/Clang **6.0 release source code** from the official SVN repository.
 ```bash
-  (from top-level folder)
-  $ cd llvm/tools/clang/tools
-  $ mkdir templight
-  $ git clone <link-to-clone-templight-github-repo> templight
-```
-
-4. Add the `templight` subdirectory to CMake:
-```bash
-  (from top-level folder)
-  $ cd llvm/tools/clang/tools
-  $ echo "add_clang_subdirectory(templight)" >> CMakeLists.txt
-```
-
-#### Getting the source code with LLVM/Clang 5.0 release version
-
-1. Download the LLVM/Clang **5.0 release source code** from the official SVN repository.
-```bash
-  $ svn co http://llvm.org/svn/llvm-project/llvm/branches/release_50 llvm
+  $ svn co http://llvm.org/svn/llvm-project/llvm/branches/release_60 llvm
   $ cd llvm/tools
-  $ svn co http://llvm.org/svn/llvm-project/cfe/branches/release_50 clang
+  $ svn co http://llvm.org/svn/llvm-project/cfe/branches/release_60 clang
 ```
 2. Download the Templight repository.
 ```bash
@@ -85,6 +66,8 @@ Templight must be compiled from source, alongside the Clang source code.
   $ cd llvm/tools/clang/tools
   $ mkdir templight
   $ git clone <link-to-clone-templight-github-repo> templight
+  $ cd templight
+  $ git checkout release_60
 ```
 3. Apply the supplied patch to Clang's source code:
 ```bash  
@@ -98,10 +81,7 @@ Templight must be compiled from source, alongside the Clang source code.
   $ cd llvm/tools/clang/tools
   $ echo "add_clang_subdirectory(templight)" >> CMakeLists.txt
 ```
-The LLVM/Clang 5.1 release version should compile without problem as well. Earlier or later versions *may or may not* work.
-#### Compiling
-
-1. (Re-)Compile LLVM / Clang: (same as the corresponding step in LLVM/Clang instructions)
+5. (Re-)Compile LLVM / Clang: (same as the corresponding step in LLVM/Clang instructions)
 ```bash
   (from top-level folder)
   $ mkdir build
@@ -109,7 +89,7 @@ The LLVM/Clang 5.1 release version should compile without problem as well. Earli
   $ cmake ../llvm/
   $ make
 ```
-2. If successful, there should be templight executables in the build/bin folder.
+6. If successful, there should be templight executables in the build/bin folder.
 
 
 ### Invoking Templight
