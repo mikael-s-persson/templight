@@ -1,0 +1,224 @@
+diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
+index 97c996d..e0b6e6f 100644
+--- a/include/clang/Driver/CC1Options.td
++++ b/include/clang/Driver/CC1Options.td
+@@ -503,6 +503,8 @@ def ftest_module_file_extension_EQ :
+            "The argument is parsed as blockname:major:minor:hashed:user info">;
+ def fconcepts_ts : Flag<["-"], "fconcepts-ts">,
+   HelpText<"Enable C++ Extensions for Concepts.">;
++def templight_profile : Flag<["-"], "templight-profile">,
++  HelpText<"Add timestamps to the templight-dump output">;
+ 
+ let Group = Action_Group in {
+ 
+diff --git a/include/clang/Frontend/FrontendOptions.h b/include/clang/Frontend/FrontendOptions.h
+index c609500..af3a22b 100644
+--- a/include/clang/Frontend/FrontendOptions.h
++++ b/include/clang/Frontend/FrontendOptions.h
+@@ -52,13 +52,13 @@ namespace frontend {
+     ParseSyntaxOnly,        ///< Parse and perform semantic analysis.
+     PluginAction,           ///< Run a plugin action, \see ActionName.
+     PrintDeclContext,       ///< Print DeclContext and their Decls.
+-    PrintPreamble,          ///< Print the "preamble" of the input file
++    PrintPreamble,          ///< Print the "preamble" of the input file.
+     PrintPreprocessedInput, ///< -E mode.
+     RewriteMacros,          ///< Expand macros but not \#includes.
+     RewriteObjC,            ///< ObjC->C Rewriter.
+-    RewriteTest,            ///< Rewriter playground
++    RewriteTest,            ///< Rewriter playground.
+     RunAnalysis,            ///< Run one or more source code analyses.
+-    TemplightDump,          ///< Dump template instantiations
++    TemplightDump,          ///< Dump template instantiations.
+     MigrateSource,          ///< Run migrator.
+     RunPreprocessorOnly     ///< Just lex, no output.
+   };
+@@ -206,6 +206,9 @@ public:
+                                            ///< files into the PCM file.
+   unsigned IncludeTimestamps : 1;          ///< Whether timestamps should be
+                                            ///< written to the produced PCH file.
++  unsigned TemplightProfile : 1;           ///< Whether to add additional
++                                           ///< information to Templight dumps.
++
+ 
+   CodeCompleteOptions CodeCompleteOpts;
+ 
+@@ -337,7 +340,7 @@ public:
+     SkipFunctionBodies(false), UseGlobalModuleIndex(true),
+     GenerateGlobalModuleIndex(true), ASTDumpDecls(false), ASTDumpLookups(false),
+     BuildingImplicitModule(false), ModulesEmbedAllFiles(false),
+-    IncludeTimestamps(true), ARCMTAction(ARCMT_None),
++    IncludeTimestamps(true), TemplightProfile(false), ARCMTAction(ARCMT_None),
+     ObjCMTAction(ObjCMT_None), ProgramAction(frontend::ParseSyntaxOnly)
+   {}
+ 
+diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
+index 23f3c8f..2259c94 100644
+--- a/lib/Frontend/CompilerInvocation.cpp
++++ b/lib/Frontend/CompilerInvocation.cpp
+@@ -1460,6 +1460,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+   Opts.ModulesEmbedFiles = Args.getAllArgValues(OPT_fmodules_embed_file_EQ);
+   Opts.ModulesEmbedAllFiles = Args.hasArg(OPT_fmodules_embed_all_files);
+   Opts.IncludeTimestamps = !Args.hasArg(OPT_fno_pch_timestamp);
++  Opts.TemplightProfile = Args.hasArg(OPT_templight_profile);
+ 
+   Opts.CodeCompleteOpts.IncludeMacros
+     = Args.hasArg(OPT_code_completion_macros);
+diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
+index 1eff566..1656095 100644
+--- a/lib/Frontend/FrontendActions.cpp
++++ b/lib/Frontend/FrontendActions.cpp
+@@ -26,6 +26,7 @@
+ #include "llvm/Support/Path.h"
+ #include "llvm/Support/raw_ostream.h"
+ #include "llvm/Support/YAMLTraits.h"
++#include <chrono>
+ #include <memory>
+ #include <system_error>
+ 
+@@ -287,19 +288,14 @@ struct TemplightEntry {
+   std::string Event;
+   std::string DefinitionLocation;
+   std::string PointOfInstantiation;
++  Optional<std::chrono::high_resolution_clock::rep> TimeStamp;
+ };
+ } // namespace
+ 
+ namespace llvm {
+ namespace yaml {
+ template <> struct MappingTraits<TemplightEntry> {
+-  static void mapping(IO &io, TemplightEntry &fields) {
+-    io.mapRequired("name", fields.Name);
+-    io.mapRequired("kind", fields.Kind);
+-    io.mapRequired("event", fields.Event);
+-    io.mapRequired("orig", fields.DefinitionLocation);
+-    io.mapRequired("poi", fields.PointOfInstantiation);
+-  }
++  static void mapping(IO &io, TemplightEntry &fields);
+ };
+ } // namespace yaml
+ } // namespace llvm
+@@ -311,19 +307,46 @@ class DefaultTemplateInstCallback : public TemplateInstantiationCallback {
+ public:
+   void initialize(const Sema &) override {}
+ 
+-  void finalize(const Sema &) override {}
++  void finalize(const Sema &) override {
++    if(isProfilingEnabled())
++      for(auto &Entry : *TemplightEntries)
++        displayTemplightEntry(llvm::outs(), Entry);
++  }
+ 
+   void atTemplateBegin(const Sema &TheSema,
+                        const CodeSynthesisContext &Inst) override {
+-    displayTemplightEntry<true>(llvm::outs(), TheSema, Inst);
++    TemplightEntry Entry = getTemplightEntry<true>(TheSema, Inst);
++
++    if(isProfilingEnabled())
++      TemplightEntries->push_back(std::move(Entry));
++    else
++      displayTemplightEntry(llvm::outs(), Entry);
+   }
+ 
+   void atTemplateEnd(const Sema &TheSema,
+                      const CodeSynthesisContext &Inst) override {
+-    displayTemplightEntry<false>(llvm::outs(), TheSema, Inst);
++    TemplightEntry Entry = getTemplightEntry<false>(TheSema, Inst);
++
++    if(isProfilingEnabled())
++      TemplightEntries->push_back(std::move(Entry));
++    else
++      displayTemplightEntry(llvm::outs(), Entry);
++  }
++  
++  void enableProfiling() {
++    TemplightEntries = std::vector<TemplightEntry>();
+   }
++  
++  bool isProfilingEnabled() {
++    return TemplightEntries.hasValue();
++  }
++
++  static const std::chrono::time_point<std::chrono::high_resolution_clock> start;
+ 
+ private:
++
++  Optional<std::vector<TemplightEntry>> TemplightEntries = None;
++  
+   static std::string toString(CodeSynthesisContext::SynthesisKind Kind) {
+     switch (Kind) {
+     case CodeSynthesisContext::TemplateInstantiation:
+@@ -352,15 +375,12 @@ private:
+     return "";
+   }
+ 
+-  template <bool BeginInstantiation>
+-  static void displayTemplightEntry(llvm::raw_ostream &Out, const Sema &TheSema,
+-                                    const CodeSynthesisContext &Inst) {
++  void displayTemplightEntry(llvm::raw_ostream &Out, 
++                                              TemplightEntry& Entry) {
+     std::string YAML;
+     {
+       llvm::raw_string_ostream OS(YAML);
+       llvm::yaml::Output YO(OS);
+-      TemplightEntry Entry =
+-          getTemplightEntry<BeginInstantiation>(TheSema, Inst);
+       llvm::yaml::EmptyContext Context;
+       llvm::yaml::yamlize(YO, Entry, true, Context);
+     }
+@@ -368,9 +388,13 @@ private:
+   }
+ 
+   template <bool BeginInstantiation>
+-  static TemplightEntry getTemplightEntry(const Sema &TheSema,
++  TemplightEntry getTemplightEntry(const Sema &TheSema,
+                                           const CodeSynthesisContext &Inst) {
+     TemplightEntry Entry;
++    if (isProfilingEnabled()){
++      auto end = std::chrono::high_resolution_clock::now();
++      Entry.TimeStamp = std::chrono::nanoseconds(end-start).count();
++    }
+     Entry.Kind = toString(Inst.Kind);
+     Entry.Event = BeginInstantiation ? "Begin" : "End";
+     if (auto *NamedTemplate = dyn_cast_or_null<NamedDecl>(Inst.Entity)) {
+@@ -393,8 +417,27 @@ private:
+     return Entry;
+   }
+ };
++
++const std::chrono::time_point<std::chrono::high_resolution_clock> 
++  DefaultTemplateInstCallback::start = std::chrono::high_resolution_clock::now();
++
+ } // namespace
+ 
++namespace llvm {
++namespace yaml {
++void MappingTraits<TemplightEntry>::mapping(IO &io, TemplightEntry &fields)
++{
++  io.mapRequired("name", fields.Name);
++  io.mapRequired("kind", fields.Kind);
++  io.mapRequired("event", fields.Event);
++  io.mapRequired("orig", fields.DefinitionLocation);
++  io.mapRequired("poi", fields.PointOfInstantiation);
++  if(fields.TimeStamp)
++    io.mapRequired("stamp", fields.TimeStamp.getValue());
++}
++} // namespace yaml
++} // namespace llvm
++
+ std::unique_ptr<ASTConsumer>
+ TemplightDumpAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
+   return llvm::make_unique<ASTConsumer>();
+@@ -409,8 +452,11 @@ void TemplightDumpAction::ExecuteAction() {
+   // here so the source manager would be initialized.
+   EnsureSemaIsCreated(CI, *this);
+ 
+-  CI.getSema().TemplateInstCallbacks.push_back(
+-      llvm::make_unique<DefaultTemplateInstCallback>());
++  auto D = llvm::make_unique<DefaultTemplateInstCallback>();
++  if(CI.getFrontendOpts().TemplightProfile)
++    D->enableProfiling();
++  
++  CI.getSema().TemplateInstCallbacks.push_back(std::move(D));
+   ASTFrontendAction::ExecuteAction();
+ }
+ 
