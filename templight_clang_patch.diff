@@ -12,50 +12,35 @@ index 97c996d..e0b6e6f 100644
  let Group = Action_Group in {
  
 diff --git a/include/clang/Frontend/FrontendOptions.h b/include/clang/Frontend/FrontendOptions.h
-index c609500..af3a22b 100644
+index 768957a..e1d4908 100644
 --- a/include/clang/Frontend/FrontendOptions.h
 +++ b/include/clang/Frontend/FrontendOptions.h
-@@ -52,13 +52,13 @@ namespace frontend {
-     ParseSyntaxOnly,        ///< Parse and perform semantic analysis.
-     PluginAction,           ///< Run a plugin action, \see ActionName.
-     PrintDeclContext,       ///< Print DeclContext and their Decls.
--    PrintPreamble,          ///< Print the "preamble" of the input file
-+    PrintPreamble,          ///< Print the "preamble" of the input file.
-     PrintPreprocessedInput, ///< -E mode.
-     RewriteMacros,          ///< Expand macros but not \#includes.
-     RewriteObjC,            ///< ObjC->C Rewriter.
--    RewriteTest,            ///< Rewriter playground
-+    RewriteTest,            ///< Rewriter playground.
-     RunAnalysis,            ///< Run one or more source code analyses.
--    TemplightDump,          ///< Dump template instantiations
-+    TemplightDump,          ///< Dump template instantiations.
-     MigrateSource,          ///< Run migrator.
-     RunPreprocessorOnly     ///< Just lex, no output.
-   };
-@@ -206,6 +206,9 @@ public:
-                                            ///< files into the PCM file.
-   unsigned IncludeTimestamps : 1;          ///< Whether timestamps should be
-                                            ///< written to the produced PCH file.
-+  unsigned TemplightProfile : 1;           ///< Whether to add additional
-+                                           ///< information to Templight dumps.
-+
+@@ -301,6 +301,10 @@ public:
+ 
+   /// Whether timestamps should be written to the produced PCH file.
+   unsigned IncludeTimestamps : 1;
++  
++  /// Whether to add additional
++  /// information to Templight dumps.
++  unsigned TemplightProfile : 1;
  
    CodeCompleteOptions CodeCompleteOpts;
  
-@@ -337,7 +340,7 @@ public:
-     SkipFunctionBodies(false), UseGlobalModuleIndex(true),
-     GenerateGlobalModuleIndex(true), ASTDumpDecls(false), ASTDumpLookups(false),
-     BuildingImplicitModule(false), ModulesEmbedAllFiles(false),
--    IncludeTimestamps(true), ARCMTAction(ARCMT_None),
-+    IncludeTimestamps(true), TemplightProfile(false), ARCMTAction(ARCMT_None),
-     ObjCMTAction(ObjCMT_None), ProgramAction(frontend::ParseSyntaxOnly)
-   {}
+@@ -447,7 +451,8 @@ public:
+         SkipFunctionBodies(false), UseGlobalModuleIndex(true),
+         GenerateGlobalModuleIndex(true), ASTDumpDecls(false),
+         ASTDumpLookups(false), BuildingImplicitModule(false),
+-        ModulesEmbedAllFiles(false), IncludeTimestamps(true) {}
++        ModulesEmbedAllFiles(false), IncludeTimestamps(true), 
++        TemplightProfile(false) {}
  
+   /// getInputKindForExtension - Return the appropriate input kind for a file
+   /// extension. For example, "c" would return InputKind::C.
 diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
-index 23f3c8f..2259c94 100644
+index 687dc68..80a7c4f 100644
 --- a/lib/Frontend/CompilerInvocation.cpp
 +++ b/lib/Frontend/CompilerInvocation.cpp
-@@ -1460,6 +1460,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+@@ -1467,6 +1467,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
    Opts.ModulesEmbedFiles = Args.getAllArgValues(OPT_fmodules_embed_file_EQ);
    Opts.ModulesEmbedAllFiles = Args.hasArg(OPT_fmodules_embed_all_files);
    Opts.IncludeTimestamps = !Args.hasArg(OPT_fno_pch_timestamp);
@@ -64,7 +49,7 @@ index 23f3c8f..2259c94 100644
    Opts.CodeCompleteOpts.IncludeMacros
      = Args.hasArg(OPT_code_completion_macros);
 diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 1eff566..1656095 100644
+index 8cb6a04..5cb7048 100644
 --- a/lib/Frontend/FrontendActions.cpp
 +++ b/lib/Frontend/FrontendActions.cpp
 @@ -26,6 +26,7 @@
@@ -75,7 +60,7 @@ index 1eff566..1656095 100644
  #include <memory>
  #include <system_error>
  
-@@ -287,19 +288,14 @@ struct TemplightEntry {
+@@ -288,19 +289,14 @@ struct TemplightEntry {
    std::string Event;
    std::string DefinitionLocation;
    std::string PointOfInstantiation;
@@ -97,7 +82,7 @@ index 1eff566..1656095 100644
  };
  } // namespace yaml
  } // namespace llvm
-@@ -311,19 +307,46 @@ class DefaultTemplateInstCallback : public TemplateInstantiationCallback {
+@@ -312,19 +308,46 @@ class DefaultTemplateInstCallback : public TemplateInstantiationCallback {
  public:
    void initialize(const Sema &) override {}
  
@@ -147,7 +132,7 @@ index 1eff566..1656095 100644
    static std::string toString(CodeSynthesisContext::SynthesisKind Kind) {
      switch (Kind) {
      case CodeSynthesisContext::TemplateInstantiation:
-@@ -352,15 +375,12 @@ private:
+@@ -353,15 +376,12 @@ private:
      return "";
    }
  
@@ -165,7 +150,7 @@ index 1eff566..1656095 100644
        llvm::yaml::EmptyContext Context;
        llvm::yaml::yamlize(YO, Entry, true, Context);
      }
-@@ -368,9 +388,13 @@ private:
+@@ -369,9 +389,13 @@ private:
    }
  
    template <bool BeginInstantiation>
@@ -180,7 +165,7 @@ index 1eff566..1656095 100644
      Entry.Kind = toString(Inst.Kind);
      Entry.Event = BeginInstantiation ? "Begin" : "End";
      if (auto *NamedTemplate = dyn_cast_or_null<NamedDecl>(Inst.Entity)) {
-@@ -393,8 +417,27 @@ private:
+@@ -394,8 +418,27 @@ private:
      return Entry;
    }
  };
@@ -208,7 +193,7 @@ index 1eff566..1656095 100644
  std::unique_ptr<ASTConsumer>
  TemplightDumpAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
    return llvm::make_unique<ASTConsumer>();
-@@ -409,8 +452,11 @@ void TemplightDumpAction::ExecuteAction() {
+@@ -410,8 +453,11 @@ void TemplightDumpAction::ExecuteAction() {
    // here so the source manager would be initialized.
    EnsureSemaIsCreated(CI, *this);
  
