@@ -1,5 +1,5 @@
 diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
-index 97c996d..e0b6e6f 100644
+index 03b43ddd..f22af830 100644
 --- a/include/clang/Driver/CC1Options.td
 +++ b/include/clang/Driver/CC1Options.td
 @@ -1,841 +1,843 @@
@@ -280,8 +280,6 @@ index 97c996d..e0b6e6f 100644
    HelpText<"Try to use a split stack if possible.">;
  def mno_zero_initialized_in_bss : Flag<["-"], "mno-zero-initialized-in-bss">,
    HelpText<"Do not put zero initialized data in the BSS">;
- def backend_option : Separate<["-"], "backend-option">,
-   HelpText<"Additional arguments to forward to LLVM backend (during code gen)">;
  def mregparm : Separate<["-"], "mregparm">,
    HelpText<"Limit the number of registers available for integer arguments">;
  def munwind_tables : Flag<["-"], "munwind-tables">,
@@ -654,6 +652,8 @@ index 97c996d..e0b6e6f 100644
    HelpText<"disable the default synthesis of Objective-C properties">;
  def fencode_extended_block_signature : Flag<["-"], "fencode-extended-block-signature">,
    HelpText<"enable extended encoding of block type signature">;
+ def function_alignment : Separate<["-"], "function-alignment">,
+     HelpText<"default alignment for functions">;
  def pic_level : Separate<["-"], "pic-level">,
    HelpText<"Value for __PIC__">;
  def pic_is_pie : Flag<["-"], "pic-is-pie">,
@@ -847,7 +847,7 @@ index 97c996d..e0b6e6f 100644
    HelpText<"Define a value for a symbol">;
  } // let Flags = [CC1AsOption]
 diff --git a/include/clang/Frontend/FrontendOptions.h b/include/clang/Frontend/FrontendOptions.h
-index 768957a..e1d4908 100644
+index 768957ac..e1d4908c 100644
 --- a/include/clang/Frontend/FrontendOptions.h
 +++ b/include/clang/Frontend/FrontendOptions.h
 @@ -1,462 +1,467 @@
@@ -1320,10 +1320,10 @@ index 768957a..e1d4908 100644
  
  #endif // LLVM_CLANG_FRONTEND_FRONTENDOPTIONS_H
 diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
-index 687dc68..80a7c4f 100644
+index 67e15b41..19ef1194 100644
 --- a/lib/Frontend/CompilerInvocation.cpp
 +++ b/lib/Frontend/CompilerInvocation.cpp
-@@ -1,3117 +1,3118 @@
+@@ -1,3170 +1,3171 @@
  //===- CompilerInvocation.cpp ---------------------------------------------===//
  //
  //                     The LLVM Compiler Infrastructure
@@ -1352,6 +1352,7 @@ index 687dc68..80a7c4f 100644
  #include "clang/Basic/VersionTuple.h"
  #include "clang/Basic/VirtualFileSystem.h"
  #include "clang/Basic/Visibility.h"
+ #include "clang/Basic/XRayInstr.h"
  #include "clang/Config/config.h"
  #include "clang/Driver/DriverDiagnostic.h"
  #include "clang/Driver/Options.h"
@@ -1401,9 +1402,9 @@ index 687dc68..80a7c4f 100644
  #include "llvm/Support/Path.h"
  #include "llvm/Support/Process.h"
  #include "llvm/Support/Regex.h"
+ #include "llvm/Support/ScopedPrinter.h"
  #include "llvm/Support/raw_ostream.h"
  #include "llvm/Target/TargetOptions.h"
- #include "llvm/Support/ScopedPrinter.h"
  #include <algorithm>
  #include <atomic>
  #include <cassert>
@@ -1772,6 +1773,25 @@ index 687dc68..80a7c4f 100644
    }
  }
  
+ static void parseXRayInstrumentationBundle(StringRef FlagName, StringRef Bundle,
+                                            ArgList &Args, DiagnosticsEngine &D,
+                                            XRayInstrSet &S) {
+   llvm::SmallVector<StringRef, 2> BundleParts;
+   llvm::SplitString(Bundle, BundleParts, ",");
+   for (const auto B : BundleParts) {
+     auto Mask = parseXRayInstrValue(B);
+     if (Mask == XRayInstrKind::None)
+       if (B != "none")
+         D.Report(diag::err_drv_invalid_value) << FlagName << Bundle;
+       else
+         S.Mask = Mask;
+     else if (Mask == XRayInstrKind::All)
+       S.Mask = Mask;
+     else
+       S.set(Mask, true);
+   }
+ }
+ 
  // Set the profile kind for fprofile-instrument.
  static void setPGOInstrumentor(CodeGenOptions &Opts, ArgList &Args,
                                 DiagnosticsEngine &Diags) {
@@ -1813,7 +1833,8 @@ index 687dc68..80a7c4f 100644
  
  static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
                               DiagnosticsEngine &Diags,
-                              const TargetOptions &TargetOpts) {
+                              const TargetOptions &TargetOpts,
+                              const FrontendOptions &FrontendOpts) {
    bool Success = true;
    llvm::Triple Triple = llvm::Triple(TargetOpts.Triple);
  
@@ -1967,6 +1988,8 @@ index 687dc68..80a7c4f 100644
    Opts.AssumeSaneOperatorNew = !Args.hasArg(OPT_fno_assume_sane_operator_new);
    Opts.ObjCAutoRefCountExceptions = Args.hasArg(OPT_fobjc_arc_exceptions);
    Opts.CXAAtExit = !Args.hasArg(OPT_fno_use_cxa_atexit);
+   Opts.RegisterGlobalDtorsWithAtExit =
+       Args.hasArg(OPT_fregister_global_dtors_with_atexit);
    Opts.CXXCtorDtorAliases = Args.hasArg(OPT_mconstructor_aliases);
    Opts.CodeModel = getCodeModel(Args, Diags);
    Opts.DebugPass = Args.getLastArgValue(OPT_mdebug_pass);
@@ -2003,7 +2026,6 @@ index 687dc68..80a7c4f 100644
    Opts.ReciprocalMath = Args.hasArg(OPT_freciprocal_math);
    Opts.NoTrappingMath = Args.hasArg(OPT_fno_trapping_math);
    Opts.NoZeroInitializedInBSS = Args.hasArg(OPT_mno_zero_initialized_in_bss);
-   Opts.BackendOptions = Args.getAllArgValues(OPT_backend_option);
    Opts.NumRegisterParameters = getLastArgIntValue(Args, OPT_mregparm, 0, Diags);
    Opts.NoExecStack = Args.hasArg(OPT_mno_exec_stack);
    Opts.FatalWarnings = Args.hasArg(OPT_massembler_fatal_warnings);
@@ -2065,6 +2087,12 @@ index 687dc68..80a7c4f 100644
            << A->getAsString(Args) << "-x ir";
      Opts.ThinLTOIndexFile = Args.getLastArgValue(OPT_fthinlto_index_EQ);
    }
+   if (Arg *A = Args.getLastArg(OPT_save_temps_EQ))
+     Opts.SaveTempsFilePrefix =
+         llvm::StringSwitch<std::string>(A->getValue())
+             .Case("obj", FrontendOpts.OutputFile)
+             .Default(llvm::sys::path::filename(FrontendOpts.OutputFile).str());
+ 
    Opts.ThinLinkBitcodeFile = Args.getLastArgValue(OPT_fthin_link_bitcode_EQ);
  
    Opts.MSVolatile = Args.hasArg(OPT_fms_volatile);
@@ -2147,11 +2175,25 @@ index 687dc68..80a7c4f 100644
        Args.hasArg(OPT_finstrument_functions_after_inlining);
    Opts.InstrumentFunctionEntryBare =
        Args.hasArg(OPT_finstrument_function_entry_bare);
-   Opts.XRayInstrumentFunctions = Args.hasArg(OPT_fxray_instrument);
+ 
+   Opts.XRayInstrumentFunctions =
+       Args.hasArg(OPT_fxray_instrument);
    Opts.XRayAlwaysEmitCustomEvents =
        Args.hasArg(OPT_fxray_always_emit_customevents);
+   Opts.XRayAlwaysEmitTypedEvents =
+       Args.hasArg(OPT_fxray_always_emit_typedevents);
    Opts.XRayInstructionThreshold =
        getLastArgIntValue(Args, OPT_fxray_instruction_threshold_EQ, 200, Diags);
+ 
+   auto XRayInstrBundles =
+       Args.getAllArgValues(OPT_fxray_instrumentation_bundle);
+   if (XRayInstrBundles.empty())
+     Opts.XRayInstrumentationBundle.Mask = XRayInstrKind::All;
+   else
+     for (const auto &A : XRayInstrBundles)
+       parseXRayInstrumentationBundle("-fxray-instrumentation-bundle=", A, Args,
+                                      Diags, Opts.XRayInstrumentationBundle);
+ 
    Opts.InstrumentForProfiling = Args.hasArg(OPT_pg);
    Opts.CallFEntry = Args.hasArg(OPT_mfentry);
    Opts.EmitOpenCLArgMetadata = Args.hasArg(OPT_cl_kernel_arg_info);
@@ -3199,6 +3241,8 @@ index 687dc68..80a7c4f 100644
      Opts.OpenCLVersion = 120;
    else if (LangStd == LangStandard::lang_opencl20)
      Opts.OpenCLVersion = 200;
+   else if (LangStd == LangStandard::lang_openclcpp)
+     Opts.OpenCLCPlusPlusVersion = 100;
  
    // OpenCL has some additional defaults.
    if (Opts.OpenCL) {
@@ -3390,6 +3434,7 @@ index 687dc68..80a7c4f 100644
          .Cases("cl1.1", "CL1.1", LangStandard::lang_opencl11)
          .Cases("cl1.2", "CL1.2", LangStandard::lang_opencl12)
          .Cases("cl2.0", "CL2.0", LangStandard::lang_opencl20)
+         .Case("c++", LangStandard::lang_openclcpp)
          .Default(LangStandard::lang_unspecified);
  
      if (OpenCLLangStd == LangStandard::lang_unspecified) {
@@ -3602,7 +3647,7 @@ index 687dc68..80a7c4f 100644
    Opts.RTTI = Opts.CPlusPlus && !Args.hasArg(OPT_fno_rtti);
    Opts.RTTIData = Opts.RTTI && !Args.hasArg(OPT_fno_rtti_data);
    Opts.Blocks = Args.hasArg(OPT_fblocks) || (Opts.OpenCL
-     && Opts.OpenCLVersion >= 200);
+     && Opts.OpenCLVersion == 200);
    Opts.BlocksRuntimeOptional = Args.hasArg(OPT_fblocks_runtime_optional);
    Opts.CoroutinesTS = Args.hasArg(OPT_fcoroutines_ts);
  
@@ -3962,6 +4007,11 @@ index 687dc68..80a7c4f 100644
        Args.hasFlag(OPT_fxray_always_emit_customevents,
                     OPT_fnoxray_always_emit_customevents, false);
  
+   // -fxray-always-emit-typedevents
+   Opts.XRayAlwaysEmitTypedEvents =
+       Args.hasFlag(OPT_fxray_always_emit_typedevents,
+                    OPT_fnoxray_always_emit_customevents, false);
+ 
    // -fxray-{always,never}-instrument= filenames.
    Opts.XRayAlwaysInstrumentFiles =
        Args.getAllArgValues(OPT_fxray_always_instrument);
@@ -4220,7 +4270,7 @@ index 687dc68..80a7c4f 100644
                                        LangOpts.IsHeaderFile);
    ParseTargetArgs(Res.getTargetOpts(), Args, Diags);
    Success &= ParseCodeGenArgs(Res.getCodeGenOpts(), Args, DashX, Diags,
-                               Res.getTargetOpts());
+                               Res.getTargetOpts(), Res.getFrontendOpts());
    ParseHeaderSearchArgs(Res.getHeaderSearchOpts(), Args,
                          Res.getFileSystemOpts().WorkingDir);
    if (DashX.getFormat() == InputKind::Precompiled ||
@@ -4244,6 +4294,9 @@ index 687dc68..80a7c4f 100644
      if (Res.getFrontendOpts().ProgramAction == frontend::RewriteObjC)
        LangOpts.ObjCExceptions = 1;
    }
+ 
+   LangOpts.FunctionAlignment =
+       getLastArgIntValue(Args, OPT_function_alignment, 0, Diags);
  
    if (LangOpts.CUDA) {
      // During CUDA device-side compilation, the aux triple is the
@@ -4443,7 +4496,7 @@ index 687dc68..80a7c4f 100644
  
  } // namespace clang
 diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 8cb6a04..5cb7048 100644
+index 8cb6a042..5cb70482 100644
 --- a/lib/Frontend/FrontendActions.cpp
 +++ b/lib/Frontend/FrontendActions.cpp
 @@ -1,757 +1,803 @@

@@ -1,0 +1,6 @@
+'templight_clang_patch*.diff' was created using the following LLVM/Clang versions:
+
+LLVM git: 7256bf169ac3709b3c3ad5c6d541cf809ec341fb
+LLVM svn: https://llvm.org/svn/llvm-project/llvm/trunk@330373
+Clang git: c33e1469f018cf71327e06df054a0ffc87f4d9f8
+Clang svn: https://llvm.org/svn/llvm-project/cfe/trunk@330382
