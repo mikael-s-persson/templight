@@ -1,8 +1,8 @@
 diff --git a/include/clang/Driver/CC1Options.td b/include/clang/Driver/CC1Options.td
-index 97c996d..e0b6e6f 100644
+index 03b43ddd..f22af830 100644
 --- a/include/clang/Driver/CC1Options.td
 +++ b/include/clang/Driver/CC1Options.td
-@@ -503,6 +503,8 @@ def ftest_module_file_extension_EQ :
+@@ -501,6 +501,8 @@ def ftest_module_file_extension_EQ :
             "The argument is parsed as blockname:major:minor:hashed:user info">;
  def fconcepts_ts : Flag<["-"], "fconcepts-ts">,
    HelpText<"Enable C++ Extensions for Concepts.">;
@@ -12,7 +12,7 @@ index 97c996d..e0b6e6f 100644
  let Group = Action_Group in {
  
 diff --git a/include/clang/Frontend/FrontendOptions.h b/include/clang/Frontend/FrontendOptions.h
-index 768957a..e1d4908 100644
+index 768957ac..e1d4908c 100644
 --- a/include/clang/Frontend/FrontendOptions.h
 +++ b/include/clang/Frontend/FrontendOptions.h
 @@ -301,6 +301,10 @@ public:
@@ -37,10 +37,10 @@ index 768957a..e1d4908 100644
    /// getInputKindForExtension - Return the appropriate input kind for a file
    /// extension. For example, "c" would return InputKind::C.
 diff --git a/lib/Frontend/CompilerInvocation.cpp b/lib/Frontend/CompilerInvocation.cpp
-index 687dc68..80a7c4f 100644
+index 67e15b41..19ef1194 100644
 --- a/lib/Frontend/CompilerInvocation.cpp
 +++ b/lib/Frontend/CompilerInvocation.cpp
-@@ -1467,6 +1467,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
+@@ -1509,6 +1509,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
    Opts.ModulesEmbedFiles = Args.getAllArgValues(OPT_fmodules_embed_file_EQ);
    Opts.ModulesEmbedAllFiles = Args.hasArg(OPT_fmodules_embed_all_files);
    Opts.IncludeTimestamps = !Args.hasArg(OPT_fno_pch_timestamp);
@@ -49,7 +49,7 @@ index 687dc68..80a7c4f 100644
    Opts.CodeCompleteOpts.IncludeMacros
      = Args.hasArg(OPT_code_completion_macros);
 diff --git a/lib/Frontend/FrontendActions.cpp b/lib/Frontend/FrontendActions.cpp
-index 8cb6a04..5cb7048 100644
+index 8cb6a042..5cb70482 100644
 --- a/lib/Frontend/FrontendActions.cpp
 +++ b/lib/Frontend/FrontendActions.cpp
 @@ -26,6 +26,7 @@
