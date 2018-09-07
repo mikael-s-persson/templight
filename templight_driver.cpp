@@ -484,14 +484,7 @@ int main(int argc_, const char **argv_) {
   if (llvm::sys::Process::FixupStandardFileDescriptors())
     return 1;
 
-  SmallVector<const char *, 256> argv;
-  llvm::SpecificBumpPtrAllocator<char> ArgAllocator;
-  std::error_code EC = llvm::sys::Process::GetArgumentVector(
-      argv, llvm::makeArrayRef(argv_, argc_), ArgAllocator);
-  if (EC) {
-    llvm::errs() << "error: couldn't get arguments: " << EC.message() << '\n';
-    return 1;
-  }
+  SmallVector<const char *, 256> argv(argv_, argv_ + argc_);
 
   std::string ProgName = normalizeProgramName(argv[0]);
   const DriverSuffix *DS = parseDriverSuffix(ProgName);
