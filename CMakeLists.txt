@@ -28,9 +28,13 @@ add_clang_executable(templight
 
 target_link_libraries(templight
   PRIVATE
+  clangAST
   clangBasic
+  clangDriver
   clangFrontend
   clangFrontendTool
+  clangLex
+  clangSema
   )
 
 set_target_properties(templight PROPERTIES VERSION ${CLANG_EXECUTABLE_VERSION})
