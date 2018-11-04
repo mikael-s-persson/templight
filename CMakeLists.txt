@@ -113,3 +113,11 @@ if(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
     endforeach(lib)
   endif(POLLY_LINK_LIBS)
 endif(WITH_POLLY AND LINK_POLLY_INTO_TOOLS)
+
+set(TEMPLIGHT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(TEMPLIGHT_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
+
+if(CLANG_INCLUDE_TESTS)
+add_subdirectory(test)
+add_subdirectory(unittests)
+endif()
