@@ -239,6 +239,7 @@ std::string TemplightProtobufWriter::printTemplateName(const std::string& Name) 
         break;
       } // else, go to case 0:
     }
+    LLVM_FALLTHROUGH;
     case 0:
       // optional string name = 1;
       llvm::protobuf::saveString(OS_inner, 1, Name); // name

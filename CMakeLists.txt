@@ -35,6 +35,7 @@ target_link_libraries(templight
   clangFrontendTool
   clangLex
   clangSema
+  clangSerialization
   )
 
 set_target_properties(templight PROPERTIES VERSION ${CLANG_EXECUTABLE_VERSION})
