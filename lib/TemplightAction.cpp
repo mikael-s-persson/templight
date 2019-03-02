@@ -139,8 +139,8 @@ bool TemplightAction::hasCodeCompletionSupport() const {
 }
 
 TemplightAction::TemplightAction(std::unique_ptr<FrontendAction> WrappedAction) :
-    WrapperFrontendAction(std::move(WrappedAction)) {
-
-}
+    WrapperFrontendAction(std::move(WrappedAction)), InstProfiler(false),
+    OutputToStdOut(false), MemoryProfile(false), OutputInSafeMode(false),
+    IgnoreSystemInst(false), InteractiveDebug(false) {}
 
 }
