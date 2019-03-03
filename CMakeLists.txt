@@ -17,25 +17,23 @@ set( LLVM_LINK_COMPONENTS
   Vectorize
   )
 
+include_directories(BEFORE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+add_subdirectory(lib)
+
 add_clang_executable(templight
   templight_driver.cpp
-  TemplightAction.cpp
-  TemplightDebugger.cpp
-  TemplightEntryPrinter.cpp
-  TemplightProtobufWriter.cpp
-  TemplightTracer.cpp
   )
 
 target_link_libraries(templight
   PRIVATE
-  clangAST
   clangBasic
   clangDriver
   clangFrontend
   clangFrontendTool
-  clangLex
-  clangSema
   clangSerialization
+  clangTemplight
   )
 
 set_target_properties(templight PROPERTIES VERSION ${CLANG_EXECUTABLE_VERSION})
