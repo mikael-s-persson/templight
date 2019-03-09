@@ -1,4 +1,4 @@
-//===- TemplightProtobufWriter.h ------ Clang Templight Protobuf Writer -*- C++ -*-===//
+//===- TemplightProtobufWriter.h --------------------*- C++ -*-------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -18,139 +18,117 @@
 #include <string>
 
 namespace llvm {
-  namespace yaml {
-    class Output;
-  }
+namespace yaml {
+class Output;
 }
-
+} // namespace llvm
 
 namespace clang {
 
-
 class TemplightYamlWriter : public TemplightWriter {
 public:
-  
-  TemplightYamlWriter(llvm::raw_ostream& aOS);
+  TemplightYamlWriter(llvm::raw_ostream &aOS);
   ~TemplightYamlWriter();
-  
-  void initialize(const std::string& aSourceName = "") override;
+
+  void initialize(const std::string &aSourceName = "") override;
   void finalize() override;
-  
-  void printEntry(const PrintableTemplightEntryBegin& aEntry) override;
-  void printEntry(const PrintableTemplightEntryEnd& aEntry) override;
-  
+
+  void printEntry(const PrintableTemplightEntryBegin &aEntry) override;
+  void printEntry(const PrintableTemplightEntryEnd &aEntry) override;
+
 private:
   std::unique_ptr<llvm::yaml::Output> Output;
 };
 
-
 class TemplightXmlWriter : public TemplightWriter {
 public:
-  
-  TemplightXmlWriter(llvm::raw_ostream& aOS);
+  TemplightXmlWriter(llvm::raw_ostream &aOS);
   ~TemplightXmlWriter();
-  
-  void initialize(const std::string& aSourceName = "") override;
-  void finalize() override;
-  
-  void printEntry(const PrintableTemplightEntryBegin& aEntry) override;
-  void printEntry(const PrintableTemplightEntryEnd& aEntry) override;
-  
-};
 
+  void initialize(const std::string &aSourceName = "") override;
+  void finalize() override;
+
+  void printEntry(const PrintableTemplightEntryBegin &aEntry) override;
+  void printEntry(const PrintableTemplightEntryEnd &aEntry) override;
+};
 
 class TemplightTextWriter : public TemplightWriter {
 public:
-  
-  TemplightTextWriter(llvm::raw_ostream& aOS);
+  TemplightTextWriter(llvm::raw_ostream &aOS);
   ~TemplightTextWriter();
-  
-  void initialize(const std::string& aSourceName = "") override;
-  void finalize() override;
-  
-  void printEntry(const PrintableTemplightEntryBegin& aEntry) override;
-  void printEntry(const PrintableTemplightEntryEnd& aEntry) override;
-  
-};
 
+  void initialize(const std::string &aSourceName = "") override;
+  void finalize() override;
+
+  void printEntry(const PrintableTemplightEntryBegin &aEntry) override;
+  void printEntry(const PrintableTemplightEntryEnd &aEntry) override;
+};
 
 struct RecordedDFSEntryTree;
 struct EntryTraversalTask;
 
 class TemplightTreeWriter : public TemplightWriter {
 public:
-  
-  TemplightTreeWriter(llvm::raw_ostream& aOS);
+  TemplightTreeWriter(llvm::raw_ostream &aOS);
   ~TemplightTreeWriter();
-  
-  void initialize(const std::string& aSourceName = "") override;
+
+  void initialize(const std::string &aSourceName = "") override;
   void finalize() override;
-  
-  void printEntry(const PrintableTemplightEntryBegin& aEntry) override;
-  void printEntry(const PrintableTemplightEntryEnd& aEntry) override;
-  
+
+  void printEntry(const PrintableTemplightEntryBegin &aEntry) override;
+  void printEntry(const PrintableTemplightEntryEnd &aEntry) override;
+
 protected:
-  virtual void openPrintedTreeNode(const EntryTraversalTask& aNode) = 0;
-  virtual void closePrintedTreeNode(const EntryTraversalTask& aNode) = 0;
-  
-  virtual void initializeTree(const std::string& aSourceName) = 0;
+  virtual void openPrintedTreeNode(const EntryTraversalTask &aNode) = 0;
+  virtual void closePrintedTreeNode(const EntryTraversalTask &aNode) = 0;
+
+  virtual void initializeTree(const std::string &aSourceName) = 0;
   virtual void finalizeTree() = 0;
-  
+
   std::unique_ptr<RecordedDFSEntryTree> p_tree;
 };
 
-
-
 class TemplightNestedXMLWriter : public TemplightTreeWriter {
 public:
-  
-  TemplightNestedXMLWriter(llvm::raw_ostream& aOS);
+  TemplightNestedXMLWriter(llvm::raw_ostream &aOS);
   ~TemplightNestedXMLWriter();
-  
-protected:
-  void openPrintedTreeNode(const EntryTraversalTask& aNode) override;
-  void closePrintedTreeNode(const EntryTraversalTask& aNode) override;
-  
-  void initializeTree(const std::string& aSourceName = "") override;
-  void finalizeTree() override;
-  
-};
 
+protected:
+  void openPrintedTreeNode(const EntryTraversalTask &aNode) override;
+  void closePrintedTreeNode(const EntryTraversalTask &aNode) override;
+
+  void initializeTree(const std::string &aSourceName = "") override;
+  void finalizeTree() override;
+};
 
 class TemplightGraphMLWriter : public TemplightTreeWriter {
 public:
-  
-  TemplightGraphMLWriter(llvm::raw_ostream& aOS);
+  TemplightGraphMLWriter(llvm::raw_ostream &aOS);
   ~TemplightGraphMLWriter();
-  
+
 protected:
-  void openPrintedTreeNode(const EntryTraversalTask& aNode) override;
-  void closePrintedTreeNode(const EntryTraversalTask& aNode) override;
-  
-  void initializeTree(const std::string& aSourceName = "") override;
+  void openPrintedTreeNode(const EntryTraversalTask &aNode) override;
+  void closePrintedTreeNode(const EntryTraversalTask &aNode) override;
+
+  void initializeTree(const std::string &aSourceName = "") override;
   void finalizeTree() override;
-  
+
 private:
   int last_edge_id;
 };
 
-
 class TemplightGraphVizWriter : public TemplightTreeWriter {
 public:
-  
-  TemplightGraphVizWriter(llvm::raw_ostream& aOS);
+  TemplightGraphVizWriter(llvm::raw_ostream &aOS);
   ~TemplightGraphVizWriter();
-  
+
 protected:
-  void openPrintedTreeNode(const EntryTraversalTask& aNode) override;
-  void closePrintedTreeNode(const EntryTraversalTask& aNode) override;
-  
-  void initializeTree(const std::string& aSourceName = "") override;
+  void openPrintedTreeNode(const EntryTraversalTask &aNode) override;
+  void closePrintedTreeNode(const EntryTraversalTask &aNode) override;
+
+  void initializeTree(const std::string &aSourceName = "") override;
   void finalizeTree() override;
-  
 };
-
-
 
 /*
 class ProtobufPrinter : public TemplightTracer::TracePrinter {
@@ -166,7 +144,7 @@ protected:
     Writer.finalize();
     Writer.dumpOnStream(*this->TraceOS);
   };
-  
+
   void printEntryImpl(const PrintableTemplightEntryBegin& Entry) override {
     Writer.printEntry(Entry);
   };
@@ -174,19 +152,17 @@ protected:
   void printEntryImpl(const PrintableTemplightEntryEnd& Entry) override {
     Writer.printEntry(Entry);
   };
-  
+
 public:
-  
-  ProtobufPrinter(const Sema &aSema, const std::string &Output) : 
+
+  ProtobufPrinter(const Sema &aSema, const std::string &Output) :
                   TemplightTracer::TracePrinter(aSema, Output) { };
-  
+
 private:
   TemplightProtobufWriter Writer;
 };
 */
 
-}
+} // namespace clang
 
 #endif
-
-

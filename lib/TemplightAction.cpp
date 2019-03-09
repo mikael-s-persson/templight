@@ -1,4 +1,4 @@
-//===- TemplightAction.cpp ------ Clang Templight Frontend Action -*- C++ -*-===//
+//===- TemplightAction.cpp --------------------------------*- C++-*--------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,8 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "TemplightAction.h"
-#include "TemplightTracer.h"
 #include "TemplightDebugger.h"
+#include "TemplightTracer.h"
 
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Sema/Sema.h>
@@ -23,8 +23,8 @@
 
 namespace clang {
 
-std::unique_ptr<clang::ASTConsumer> TemplightAction::CreateASTConsumer(
-    CompilerInstance &CI, StringRef InFile) {
+std::unique_ptr<clang::ASTConsumer>
+TemplightAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   return WrapperFrontendAction::CreateASTConsumer(CI, InFile);
 }
 bool TemplightAction::BeginInvocation(CompilerInstance &CI) {
@@ -35,26 +35,25 @@ bool TemplightAction::BeginSourceFileAction(CompilerInstance &CI) {
 }
 
 std::string TemplightAction::CreateOutputFilename(
-    CompilerInstance *CI,
-    const std::string& OptOutputName,
+    CompilerInstance *CI, const std::string &OptOutputName,
     bool OptInstProfiler, bool OptOutputToStdOut, bool OptMemoryProfile) {
   std::string result;
 
-  if ( !OptInstProfiler )
+  if (!OptInstProfiler)
     return result; // no need for an output-filename.
 
-  if ( OptOutputToStdOut ) {
+  if (OptOutputToStdOut) {
     return "-";
-  } else if ( CI && OptOutputName.empty() ) {
+  } else if (CI && OptOutputName.empty()) {
     result = CI->getFrontendOpts().OutputFile;
   } else {
     result = OptOutputName;
   }
 
   // Should never get executed.
-  if ( CI && result.empty() ) {
+  if (CI && result.empty()) {
     // then, derive output name from the input name:
-    if ( CI->hasSourceManager() ) {
+    if (CI->hasSourceManager()) {
       FileID fileID = CI->getSourceManager().getMainFileID();
       result = CI->getSourceManager().getFileEntryForID(fileID)->getName();
     } else { // or, last resort:
@@ -62,7 +61,7 @@ std::string TemplightAction::CreateOutputFilename(
     }
   }
 
-  if( result.rfind(".trace.") == std::string::npos ) {
+  if (result.rfind(".trace.") == std::string::npos) {
     result += (OptMemoryProfile ? ".memory.trace." : ".trace.");
     result += "pbf";
   }
@@ -70,7 +69,7 @@ std::string TemplightAction::CreateOutputFilename(
   return result;
 }
 
-void TemplightAction::EnsureHasSema(CompilerInstance& CI) {
+void TemplightAction::EnsureHasSema(CompilerInstance &CI) {
   if (!CI.hasSema()) {
     // This part is normally done by ASTFrontEndAction, but needs to happen
     //  before Templight observers can be created ----------------------->>
@@ -96,19 +95,20 @@ void TemplightAction::ExecuteAction() {
   if (!CI.hasPreprocessor())
     return;
 
-  if ( InstProfiler ) {
+  if (InstProfiler) {
     EnsureHasSema(CI);
 
-    std::unique_ptr<TemplightTracer> p_t(new TemplightTracer(CI.getSema(), OutputFilename,
-      MemoryProfile, OutputInSafeMode, IgnoreSystemInst));
+    std::unique_ptr<TemplightTracer> p_t(
+        new TemplightTracer(CI.getSema(), OutputFilename, MemoryProfile,
+                            OutputInSafeMode, IgnoreSystemInst));
     p_t->readBlacklists(BlackListFilename);
     CI.getSema().TemplateInstCallbacks.push_back(std::move(p_t));
   }
-  if ( InteractiveDebug ) {
+  if (InteractiveDebug) {
     EnsureHasSema(CI);
 
-    std::unique_ptr<TemplightDebugger> p_t(new TemplightDebugger(CI.getSema(),
-      MemoryProfile, IgnoreSystemInst));
+    std::unique_ptr<TemplightDebugger> p_t(
+        new TemplightDebugger(CI.getSema(), MemoryProfile, IgnoreSystemInst));
     p_t->readBlacklists(BlackListFilename);
     CI.getSema().TemplateInstCallbacks.push_back(std::move(p_t));
   }
@@ -138,9 +138,9 @@ bool TemplightAction::hasCodeCompletionSupport() const {
   return WrapperFrontendAction::hasCodeCompletionSupport();
 }
 
-TemplightAction::TemplightAction(std::unique_ptr<FrontendAction> WrappedAction) :
-    WrapperFrontendAction(std::move(WrappedAction)), InstProfiler(false),
-    OutputToStdOut(false), MemoryProfile(false), OutputInSafeMode(false),
-    IgnoreSystemInst(false), InteractiveDebug(false) {}
+TemplightAction::TemplightAction(std::unique_ptr<FrontendAction> WrappedAction)
+    : WrapperFrontendAction(std::move(WrappedAction)), InstProfiler(false),
+      OutputToStdOut(false), MemoryProfile(false), OutputInSafeMode(false),
+      IgnoreSystemInst(false), InteractiveDebug(false) {}
 
-}
+} // namespace clang
