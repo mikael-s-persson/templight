@@ -1,4 +1,4 @@
-//===- PrintableTemplightEntries.h ------ Clang Templight Printable Entries -*- C++ -*-===//
+//===- PrintableTemplightEntries.h -------------------*- C++ -*------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,11 +10,11 @@
 #ifndef LLVM_CLANG_PRINTABLE_TEMPLIGHT_ENTRIES_H
 #define LLVM_CLANG_PRINTABLE_TEMPLIGHT_ENTRIES_H
 
-#include <string>
 #include <cstdint>
+#include <string>
 
 namespace llvm {
-  class raw_ostream;
+class raw_ostream;
 }
 
 namespace clang {
@@ -37,27 +37,21 @@ struct PrintableTemplightEntryEnd {
   std::uint64_t MemoryUsage;
 };
 
-
 class TemplightWriter {
 public:
-  
-  TemplightWriter(llvm::raw_ostream& aOS) : OutputOS(aOS) { };
-  virtual ~TemplightWriter() { };
-  
-  virtual void initialize(const std::string& aSourceName = "") = 0;
+  TemplightWriter(llvm::raw_ostream &aOS) : OutputOS(aOS){};
+  virtual ~TemplightWriter(){};
+
+  virtual void initialize(const std::string &aSourceName = "") = 0;
   virtual void finalize() = 0;
-  
-  virtual void printEntry(const PrintableTemplightEntryBegin& aEntry) = 0;
-  virtual void printEntry(const PrintableTemplightEntryEnd& aEntry) = 0;
-  
+
+  virtual void printEntry(const PrintableTemplightEntryBegin &aEntry) = 0;
+  virtual void printEntry(const PrintableTemplightEntryEnd &aEntry) = 0;
+
 protected:
-  llvm::raw_ostream& OutputOS;
+  llvm::raw_ostream &OutputOS;
 };
 
-
-}
+} // namespace clang
 
 #endif
-
-
-

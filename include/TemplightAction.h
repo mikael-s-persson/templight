@@ -20,8 +20,8 @@ namespace clang {
 
 class TemplightAction : public WrapperFrontendAction {
 protected:
-  std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(CompilerInstance &CI,
-                                                        StringRef InFile) override;
+  std::unique_ptr<clang::ASTConsumer>
+  CreateASTConsumer(CompilerInstance &CI, StringRef InFile) override;
   bool BeginInvocation(CompilerInstance &CI) override;
   bool BeginSourceFileAction(CompilerInstance &CI) override;
   void ExecuteAction() override;
@@ -39,12 +39,11 @@ public:
   bool hasIRSupport() const override;
   bool hasCodeCompletionSupport() const override;
 
-  static std::string CreateOutputFilename(
-    CompilerInstance *CI,
-    const std::string& OptOutputName,
-    bool OptInstProfiler,
-    bool OptOutputToStdOut,
-    bool OptMemoryProfile);
+  static std::string CreateOutputFilename(CompilerInstance *CI,
+                                          const std::string &OptOutputName,
+                                          bool OptInstProfiler,
+                                          bool OptOutputToStdOut,
+                                          bool OptMemoryProfile);
 
   unsigned InstProfiler : 1;
   unsigned OutputToStdOut : 1;
@@ -56,9 +55,9 @@ public:
   std::string BlackListFilename;
 
 private:
-  void EnsureHasSema(CompilerInstance& CI);
+  void EnsureHasSema(CompilerInstance &CI);
 };
 
-}
+} // namespace clang
 
 #endif
