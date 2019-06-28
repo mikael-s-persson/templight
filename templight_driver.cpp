@@ -336,7 +336,7 @@ static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
     Opts->PrintHelp(llvm::outs(), "templight",
                     "Template Profiler and Debugger based on LLVM 'Clang' "
                     "Compiler: http://clang.llvm.org",
-                    /*Include=*/driver::options::CC1Option, /*Exclude=*/0);
+                    /*Include=*/driver::options::CC1Option, /*Exclude=*/0, false);
 
     return 0;
   }
