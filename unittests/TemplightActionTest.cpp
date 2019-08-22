@@ -18,6 +18,6 @@ using namespace clang;
 
 TEST(TemplightActionTest, SimpleInvocation) {
   EXPECT_TRUE(tooling::runToolOnCode(
-      new TemplightAction{llvm::make_unique<TemplightDumpAction>()},
+      new TemplightAction{std::make_unique<TemplightDumpAction>()},
       "void f() {;}"));
 }
