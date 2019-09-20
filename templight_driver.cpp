@@ -294,9 +294,9 @@ static void FixupDiagPrefixExeName(TextDiagnosticPrinter *DiagClient,
 static DiagnosticOptions *
 CreateAndPopulateDiagOpts(SmallVectorImpl<const char *> &argv) {
   auto *DiagOpts = new DiagnosticOptions;
-  std::unique_ptr<OptTable> Opts(createDriverOptTable());
+  auto& Opts = getDriverOptTable();
   unsigned MissingArgIndex, MissingArgCount;
-  InputArgList Args(Opts->ParseArgs(
+  InputArgList Args(Opts.ParseArgs(
       llvm::ArrayRef<const char *>(argv.begin() + 1, argv.end()),
       MissingArgIndex, MissingArgCount));
   // We ignore MissingArgCount and the return value of ParseDiagnosticArgs.
@@ -332,8 +332,8 @@ static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   if (Clang->getFrontendOpts().ShowHelp) {
 
     // Print the help for the general clang options:
-    std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
-    Opts->PrintHelp(llvm::outs(), "templight",
+    auto& Opts = driver::getDriverOptTable();
+    Opts.PrintHelp(llvm::outs(), "templight",
                     "Template Profiler and Debugger based on LLVM 'Clang' "
                     "Compiler: http://clang.llvm.org",
                     /*Include=*/driver::options::CC1Option, /*Exclude=*/0, false);
@@ -430,13 +430,11 @@ static void ExecuteTemplightCommand(
   if (StringRef(J.getCreator().getName()) == "clang") {
     // Initialize a compiler invocation object from the clang (-cc1) arguments.
     const ArgStringList &cc_arguments = J.getArguments();
-    const char **args_start = const_cast<const char **>(cc_arguments.data());
-    const char **args_end = args_start + cc_arguments.size();
 
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
 
     int Res = !CompilerInvocation::CreateFromArgs(Clang->getInvocation(),
-                                                  args_start, args_end, Diags);
+                                                  cc_arguments, Diags);
     if (Res)
       FailingCommands.push_back(std::make_pair(Res, &J));
 
@@ -613,8 +611,8 @@ int main(int argc_, const char **argv_) {
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
 
     Res = !CompilerInvocation::CreateFromArgs(Clang->getInvocation(),
-                                              clang_argv.begin() + 2,
-                                              clang_argv.end(), Diags);
+                                              {clang_argv.begin() + 2,
+                                              clang_argv.end()}, Diags);
 
     // Infer the builtin include path if unspecified.
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
