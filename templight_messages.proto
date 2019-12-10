@@ -12,10 +12,11 @@ message TemplightEntry {
     DeducedTemplateArgumentSubstitution = 4;
     PriorTemplateArgumentSubstitution = 5;
     DefaultTemplateArgumentChecking = 6;
-    ExceptionSpecInstantiation = 7;
-    DeclaringSpecialMember = 8;
-    DefiningSynthesizedFunction = 9;
-    Memoization = 10;
+    ExceptionSpecEvaluation = 7;
+    ExceptionSpecInstantiation = 8;
+    DeclaringSpecialMember = 9;
+    DefiningSynthesizedFunction = 10;
+    Memoization = 11;
   }
 
   message TemplateName {
