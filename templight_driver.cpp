@@ -292,13 +292,12 @@ static void FixupDiagPrefixExeName(TextDiagnosticPrinter *DiagClient,
 // This lets us create the DiagnosticsEngine with a properly-filled-out
 // DiagnosticOptions instance.
 static DiagnosticOptions *
-CreateAndPopulateDiagOpts(SmallVectorImpl<const char *> &argv) {
+CreateAndPopulateDiagOpts(ArrayRef<const char *> argv) {
   auto *DiagOpts = new DiagnosticOptions;
-  auto& Opts = getDriverOptTable();
+  std::unique_ptr<OptTable> Opts(createDriverOptTable());
   unsigned MissingArgIndex, MissingArgCount;
-  InputArgList Args(Opts.ParseArgs(
-      llvm::ArrayRef<const char *>(argv.begin() + 1, argv.end()),
-      MissingArgIndex, MissingArgCount));
+  InputArgList Args =
+      Opts->ParseArgs(argv.slice(1), MissingArgIndex, MissingArgCount);
   // We ignore MissingArgCount and the return value of ParseDiagnosticArgs.
   // Any errors that would be diagnosed here will also be diagnosed later,
   // when the DiagnosticsEngine actually exists.
@@ -332,8 +331,7 @@ static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   if (Clang->getFrontendOpts().ShowHelp) {
 
     // Print the help for the general clang options:
-    auto& Opts = driver::getDriverOptTable();
-    Opts.PrintHelp(llvm::outs(), "templight",
+    createDriverOptTable()->PrintHelp(llvm::outs(), "templight",
                     "Template Profiler and Debugger based on LLVM 'Clang' "
                     "Compiler: http://clang.llvm.org",
                     /*Include=*/driver::options::CC1Option, /*Exclude=*/0, false);
@@ -365,12 +363,12 @@ static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   // This should happen AFTER plugins have been loaded!
   if (!Clang->getFrontendOpts().LLVMArgs.empty()) {
     unsigned NumArgs = Clang->getFrontendOpts().LLVMArgs.size();
-    auto Args = std::make_unique<const char *[]>(NumArgs + 2);
+    std::vector<const char*> Args(NumArgs + 2);
     Args[0] = "clang (LLVM option parsing)";
     for (unsigned i = 0; i != NumArgs; ++i)
       Args[i + 1] = Clang->getFrontendOpts().LLVMArgs[i].c_str();
     Args[NumArgs + 1] = nullptr;
-    llvm::cl::ParseCommandLineOptions(NumArgs + 1, Args.get());
+    llvm::cl::ParseCommandLineOptions(NumArgs + 1, Args.data());
   }
 
 #ifdef CLANG_ENABLE_STATIC_ANALYZER
@@ -434,7 +432,7 @@ static void ExecuteTemplightCommand(
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
 
     int Res = !CompilerInvocation::CreateFromArgs(Clang->getInvocation(),
-                                                  cc_arguments, Diags);
+                                                  cc_arguments.begin(), cc_arguments.end(), Diags);
     if (Res)
       FailingCommands.push_back(std::make_pair(Res, &J));
 
@@ -611,8 +609,8 @@ int main(int argc_, const char **argv_) {
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
 
     Res = !CompilerInvocation::CreateFromArgs(Clang->getInvocation(),
-                                              {clang_argv.begin() + 2,
-                                              clang_argv.end()}, Diags);
+                                              clang_argv.begin() + 2,
+                                              clang_argv.end(), Diags);
 
     // Infer the builtin include path if unspecified.
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
