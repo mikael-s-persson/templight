@@ -197,7 +197,7 @@ public:
     // get the source name from the source manager:
     FileID fileID = TheSema.getSourceManager().getMainFileID();
     std::string src_name =
-        TheSema.getSourceManager().getFileEntryForID(fileID)->getName();
+        TheSema.getSourceManager().getFileEntryForID(fileID)->getName().str();
     initialize(src_name);
   };
 

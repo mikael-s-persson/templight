@@ -159,7 +159,7 @@ void initializePollyPasses(llvm::PassRegistry &Registry);
 
 static const char *GetStableCStr(std::set<std::string> &SavedStrings,
                                  StringRef S) {
-  return SavedStrings.insert(S).first->c_str();
+  return SavedStrings.insert(S.str()).first->c_str();
 }
 
 struct DriverSuffix {
@@ -195,7 +195,7 @@ static const DriverSuffix *FindDriverSuffix(StringRef ProgName) {
 /// Normalize the program name from argv[0] by stripping the file extension if
 /// present and lower-casing the string on Windows.
 static std::string normalizeProgramName(const char *Argv0) {
-  std::string ProgName = llvm::sys::path::stem(Argv0);
+  std::string ProgName = llvm::sys::path::stem(Argv0).str();
 #ifdef LLVM_ON_WIN32
   // Transform to lowercase for case insensitive file systems.
   std::transform(ProgName.begin(), ProgName.end(), ProgName.begin(), ::tolower);
@@ -252,7 +252,7 @@ static void insertArgsFromProgramName(StringRef ProgName,
   // Infer target from the prefix.
   StringRef Prefix = ProgName.slice(0, LastComponent);
   std::string IgnoredError;
-  if (llvm::TargetRegistry::lookupTarget(Prefix, IgnoredError)) {
+  if (llvm::TargetRegistry::lookupTarget(Prefix.str(), IgnoredError)) {
     auto it = ArgVector.begin();
     if (it != ArgVector.end())
       ++it;
@@ -286,7 +286,7 @@ static void FixupDiagPrefixExeName(TextDiagnosticPrinter *DiagClient,
   StringRef ExeBasename(llvm::sys::path::filename(Path));
   if (ExeBasename.equals_lower("cl.exe"))
     ExeBasename = "templight-cl.exe";
-  DiagClient->setPrefix(ExeBasename);
+  DiagClient->setPrefix(ExeBasename.str());
 }
 
 // This lets us create the DiagnosticsEngine with a properly-filled-out
@@ -294,10 +294,11 @@ static void FixupDiagPrefixExeName(TextDiagnosticPrinter *DiagClient,
 static DiagnosticOptions *
 CreateAndPopulateDiagOpts(ArrayRef<const char *> argv) {
   auto *DiagOpts = new DiagnosticOptions;
-  std::unique_ptr<OptTable> Opts(createDriverOptTable());
+  getDriverOptTable();
+  const OptTable& Opts(getDriverOptTable());
   unsigned MissingArgIndex, MissingArgCount;
   InputArgList Args =
-      Opts->ParseArgs(argv.slice(1), MissingArgIndex, MissingArgCount);
+      Opts.ParseArgs(argv.slice(1), MissingArgIndex, MissingArgCount);
   // We ignore MissingArgCount and the return value of ParseDiagnosticArgs.
   // Any errors that would be diagnosed here will also be diagnosed later,
   // when the DiagnosticsEngine actually exists.
@@ -331,7 +332,7 @@ static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   if (Clang->getFrontendOpts().ShowHelp) {
 
     // Print the help for the general clang options:
-    createDriverOptTable()->PrintHelp(llvm::outs(), "templight",
+    getDriverOptTable().PrintHelp(llvm::outs(), "templight",
                     "Template Profiler and Debugger based on LLVM 'Clang' "
                     "Compiler: http://clang.llvm.org",
                     /*Include=*/driver::options::CC1Option, /*Exclude=*/0, false);
@@ -432,7 +433,7 @@ static void ExecuteTemplightCommand(
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
 
     int Res = !CompilerInvocation::CreateFromArgs(Clang->getInvocation(),
-                                                  cc_arguments.begin(), cc_arguments.end(), Diags);
+                                                  cc_arguments, Diags);
     if (Res)
       FailingCommands.push_back(std::make_pair(Res, &J));
 
@@ -609,8 +610,8 @@ int main(int argc_, const char **argv_) {
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
 
     Res = !CompilerInvocation::CreateFromArgs(Clang->getInvocation(),
-                                              clang_argv.begin() + 2,
-                                              clang_argv.end(), Diags);
+                                              ArrayRef<const char *>(clang_argv.data() + 2, clang_argv.data() + clang_argv.size()),
+                                              Diags);
 
     // Infer the builtin include path if unspecified.
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
