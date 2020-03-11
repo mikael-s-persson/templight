@@ -55,7 +55,7 @@ std::string TemplightAction::CreateOutputFilename(
     // then, derive output name from the input name:
     if (CI->hasSourceManager()) {
       FileID fileID = CI->getSourceManager().getMainFileID();
-      result = CI->getSourceManager().getFileEntryForID(fileID)->getName();
+      result = CI->getSourceManager().getFileEntryForID(fileID)->getName().str();
     } else { // or, last resort:
       result = "a";
     }
