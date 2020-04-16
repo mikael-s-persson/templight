@@ -11,6 +11,7 @@
 #include "TemplightDebugger.h"
 #include "TemplightTracer.h"
 
+#include "clang/Basic/FileManager.h"
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Sema/Sema.h>
 #include <clang/Sema/TemplateInstCallback.h>
