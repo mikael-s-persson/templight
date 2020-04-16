@@ -29,7 +29,6 @@
 #include "clang/Frontend/TextDiagnosticPrinter.h"
 #include "clang/Frontend/Utils.h"
 #include "clang/FrontendTool/Utils.h"
-#include "clang/StaticAnalyzer/Frontend/CheckerRegistration.h"
 #include "clang/StaticAnalyzer/Frontend/FrontendActions.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
