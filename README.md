@@ -52,12 +52,12 @@ The debugger is enabled by the templight option `-debugger`, and it supports the
 
 Templight must be compiled from source, alongside the Clang source code.
 
-1. [Follow the instructions from LLVM/Clang](http://clang.llvm.org/get_started.html) to get a local copy of the **latest svn trunk** of the Clang source code. Cloning the official git repository should work just as well.
+1. [Follow the instructions from LLVM/Clang](http://clang.llvm.org/get_started.html) to get a local copy of the **latest git master** of the Clang source code.
 
 2. Clone the templight repository into the clang directories, as follows:
 ```bash
   (from top-level folder)
-  $ cd llvm/tools/clang/tools
+  $ cd clang/tools
   $ mkdir templight
   $ git clone <link-to-clone-templight-github-repo> templight
 ```
@@ -65,7 +65,7 @@ Templight must be compiled from source, alongside the Clang source code.
 3. Add the `templight` subdirectory to CMake:
 ```bash
   (from top-level folder)
-  $ cd llvm/tools/clang/tools
+  $ cd clang/tools
   $ echo "add_clang_subdirectory(templight)" >> CMakeLists.txt
 ```
 
@@ -74,7 +74,7 @@ Templight must be compiled from source, alongside the Clang source code.
   (from top-level folder)
   $ mkdir build
   $ cd build
-  $ cmake ../llvm/
+  $ cmake -DLLVM_ENABLE_PROJECTS=clang ../llvm/
   $ make
 ```
 
