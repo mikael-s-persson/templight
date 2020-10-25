@@ -417,12 +417,13 @@ static void ExecuteTemplightCommand(
   // capacity if the tool does not support response files, there is a chance/
   // that things will just work without a response file, so we silently just
   // skip it.
-  if (J.getCreator().getResponseFilesSupport() != Tool::RF_None &&
-      llvm::sys::commandLineFitsWithinSystemLimits(J.getExecutable(),
-                                                   J.getArguments())) {
-    std::string TmpName = TheDriver.GetTemporaryPath("response", "txt");
-    J.setResponseFile(
-        C.addTempFile(C.getArgs().MakeArgString(TmpName.c_str())));
+  if (J.getResponseFileSupport().ResponseKind !=
+          ResponseFileSupport::RF_None &&
+      !llvm::sys::commandLineFitsWithinSystemLimits(J.getExecutable(),
+                                                   J.getArguments()))
+  {
+    const std::string TmpName = TheDriver.GetTemporaryPath("response", "txt");
+    J.setResponseFile(C.addTempFile(C.getArgs().MakeArgString(TmpName)));
   }
 
   if (StringRef(J.getCreator().getName()) == "clang") {
