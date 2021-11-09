@@ -89,7 +89,7 @@ TemplightEntryPrinter::TemplightEntryPrinter(const std::string &Output)
     TraceOS = &llvm::outs();
   } else {
     std::error_code error;
-    TraceOS = new llvm::raw_fd_ostream(Output, error, llvm::sys::fs::F_None);
+    TraceOS = new llvm::raw_fd_ostream(Output, error, llvm::sys::fs::OF_None);
     if (error) {
       llvm::errs() << "Error: [Templight] Can not open file to write trace of "
                       "template instantiations: "
