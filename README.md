@@ -52,7 +52,7 @@ The debugger is enabled by the templight option `-debugger`, and it supports the
 
 Templight must be compiled from source, alongside the Clang source code.
 
-1. [Follow the instructions from LLVM/Clang](http://clang.llvm.org/get_started.html) to get a local copy of the **latest git master** of the Clang source code.
+1. [Follow the instructions from LLVM/Clang](http://clang.llvm.org/get_started.html) to get a local copy of the Clang source code.
 
 2. Clone the templight repository into the clang directories, as follows:
 ```bash
