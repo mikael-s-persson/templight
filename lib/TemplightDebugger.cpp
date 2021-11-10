@@ -108,7 +108,7 @@ void fillWithTemplateArgumentPrints(const TemplateArgument *Args,
     } else {
       std::string Buf;
       llvm::raw_string_ostream ArgOS(Buf);
-      Args[Arg].print(Policy, ArgOS);
+      Args[Arg].print(Policy, ArgOS, /*IncludeType*/ true);
       *(It++) = Buf;
     }
   }
@@ -231,7 +231,8 @@ public:
               cur_result.Name += " with value ";
             cur_result.Name += "<empty>";
             llvm::raw_string_ostream OS_arg(cur_result.Name);
-            Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
+            Args[I].print(TheSema.getPrintingPolicy(), OS_arg,
+                          /*IncludeType*/ true);
             OS_arg.str(); // flush to string.
             break;
           }
@@ -240,7 +241,9 @@ public:
             if (QueryKind & LookForValue) {
               if (!cur_result.Name.empty())
                 cur_result.Name += " with value ";
-              cur_result.Name += Args[I].getAsIntegral().toString(10);
+              llvm::SmallString<32> tmp;
+              Args[I].getAsIntegral().toString(tmp, 10);
+              cur_result.Name += tmp;
             }
             if (QueryKind & LookForType) {
               if (!cur_result.Name.empty())
@@ -363,7 +366,8 @@ public:
             if (!cur_result.Name.empty())
               cur_result.Name += " standing for ";
             llvm::raw_string_ostream OS_arg(cur_result.Name);
-            Args[I].print(TheSema.getPrintingPolicy(), OS_arg);
+            Args[I].print(TheSema.getPrintingPolicy(), OS_arg,
+                          /*IncludeType*/ true);
             OS_arg.str(); // flush to string.
             break;
           }

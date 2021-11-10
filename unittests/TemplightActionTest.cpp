@@ -17,7 +17,8 @@
 using namespace clang;
 
 TEST(TemplightActionTest, SimpleInvocation) {
-  EXPECT_TRUE(tooling::runToolOnCode(
-      new TemplightAction{std::make_unique<TemplightDumpAction>()},
-      "void f() {;}"));
+  EXPECT_TRUE(
+      tooling::runToolOnCode(std::make_unique<TemplightAction>(
+                                 std::make_unique<TemplightDumpAction>()),
+                             "void f() {;}"));
 }

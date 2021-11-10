@@ -36,6 +36,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/MC/TargetRegistry.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/OptTable.h"
 #include "llvm/Option/Option.h"
@@ -53,7 +54,6 @@
 #include "llvm/Support/Regex.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/StringSaver.h"
-#include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
@@ -283,7 +283,7 @@ static void FixupDiagPrefixExeName(TextDiagnosticPrinter *DiagClient,
   // reasons, use templight-cl.exe as the prefix to avoid confusion between
   // templight and MSVC.
   StringRef ExeBasename(llvm::sys::path::filename(Path));
-  if (ExeBasename.equals_lower("cl.exe"))
+  if (ExeBasename.equals_insensitive("cl.exe"))
     ExeBasename = "templight-cl.exe";
   DiagClient->setPrefix(ExeBasename.str());
 }
@@ -331,10 +331,11 @@ static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
   if (Clang->getFrontendOpts().ShowHelp) {
 
     // Print the help for the general clang options:
-    getDriverOptTable().PrintHelp(llvm::outs(), "templight",
-                    "Template Profiler and Debugger based on LLVM 'Clang' "
-                    "Compiler: http://clang.llvm.org",
-                    /*Include=*/driver::options::CC1Option, /*Exclude=*/0, false);
+    getDriverOptTable().printHelp(
+        llvm::outs(), "templight",
+        "Template Profiler and Debugger based on LLVM 'Clang' "
+        "Compiler: http://clang.llvm.org",
+        /*Include=*/driver::options::CC1Option, /*Exclude=*/0, false);
 
     return 0;
   }
@@ -559,7 +560,7 @@ int main(int argc_, const char **argv_) {
   std::string Path = GetExecutablePath(clang_argv[0], CanonicalPrefixes);
 
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts =
-      CreateAndPopulateDiagOpts(clang_argv);
+      ::CreateAndPopulateDiagOpts(clang_argv);
 
   TextDiagnosticPrinter *DiagClient =
       new TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
@@ -670,7 +671,7 @@ int main(int argc_, const char **argv_) {
       if ((!FinalOutputFilename.empty()) && (FinalOutputFilename != "-")) {
         std::error_code error;
         llvm::raw_fd_ostream TraceOS(FinalOutputFilename, error,
-                                     llvm::sys::fs::F_None);
+                                     llvm::sys::fs::OF_None);
         if (error) {
           llvm::errs() << "Error: [Templight] Can not open file to write trace "
                           "of template instantiations: "
