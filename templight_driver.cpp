@@ -321,9 +321,12 @@ static void SetInstallDir(SmallVectorImpl<const char *> &argv,
       InstalledPath = Tmp;
   }
   llvm::sys::fs::make_absolute(InstalledPath);
-  InstalledPath = llvm::sys::path::parent_path(InstalledPath);
-  if (llvm::sys::fs::exists(InstalledPath.c_str()))
-    TheDriver.setInstalledDir(InstalledPath);
+
+  // TODO: SmallString::assign asserts here for some reason, so change to a
+  // StringRef. We should debug, or at least understand why thats happening.
+  StringRef Tmp = llvm::sys::path::parent_path(InstalledPath);
+  if (llvm::sys::fs::exists(Tmp))
+    TheDriver.setInstalledDir(Tmp);
 }
 
 static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
