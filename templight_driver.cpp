@@ -185,7 +185,7 @@ static const DriverSuffix *FindDriverSuffix(StringRef ProgName) {
       {"++", "--driver-mode=g++"},
   };
 
-  for (size_t i = 0; i < llvm::array_lengthof(DriverSuffixes); ++i)
+  for (size_t i = 0; i < std::size(DriverSuffixes); ++i)
     if (ProgName.endswith(DriverSuffixes[i].Suffix))
       return &DriverSuffixes[i];
   return nullptr;
@@ -518,7 +518,11 @@ int main(int argc_, const char **argv_) {
   bool MarkEOLs = true;
   if (argv.size() > 1 && StringRef(argv[1]).startswith("-cc1"))
     MarkEOLs = false;
-  llvm::cl::ExpandResponseFiles(Saver, Tokenizer, argv, MarkEOLs);
+  llvm::cl::ExpansionContext ExpCtx(Saver.getAllocator(), Tokenizer);
+  if (llvm::Error err = ExpCtx.setMarkEOLs(MarkEOLs).expandResponseFiles(argv)) {
+    llvm_unreachable("TODO");
+  }
+
 
   // Separate out templight and clang flags.  templight flags are "-Xtemplight
   // <templight_flag>"

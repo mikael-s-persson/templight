@@ -11,6 +11,7 @@
 #include "PrintableTemplightEntries.h"
 
 #include "ThinProtobuf.h"
+#include "llvm/ADT/StringExtras.h"
 
 #include <llvm/Support/Compression.h>
 #include <llvm/Support/Error.h>
@@ -239,14 +240,13 @@ TemplightProtobufWriter::printTemplateName(const std::string &Name) {
 
   switch (compressionMode) {
   case 1: { // zlib-compressed name:
-    llvm::SmallVector<char, 32> CompressedBuffer;
-    if (llvm::zlib::compress(llvm::StringRef(Name), CompressedBuffer)) {
-      // optional bytes compressed_name = 2;
-      llvm::protobuf::saveString(
-          OS_inner, 2,
-          llvm::StringRef(CompressedBuffer.begin(), CompressedBuffer.size()));
-      break;
-    } // else, go to case 0:
+    llvm::SmallVector<uint8_t, 32> CompressedBuffer;
+    llvm::compression::zlib::compress(llvm::arrayRefFromStringRef(Name),
+                                      CompressedBuffer);
+    // optional bytes compressed_name = 2;
+    llvm::protobuf::saveString(OS_inner, 2,
+                               llvm::toStringRef(CompressedBuffer));
+    break;
   }
     LLVM_FALLTHROUGH;
   case 0:
