@@ -44,11 +44,10 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/Host.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Process.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/Regex.h"
@@ -57,6 +56,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/TargetParser/Host.h"
 
 #include "TemplightAction.h"
 
@@ -141,24 +141,25 @@ void PrintTemplightHelp() {
 }
 
 std::string GetExecutablePath(const char *Argv0, bool CanonicalPrefixes) {
-  if (!CanonicalPrefixes)
-    return Argv0;
+  if (!CanonicalPrefixes) {
+    SmallString<128> ExecutablePath(Argv0);
+    // Do a PATH lookup if Argv0 isn't a valid path.
+    if (!llvm::sys::fs::exists(ExecutablePath))
+      if (llvm::ErrorOr<std::string> P =
+              llvm::sys::findProgramByName(ExecutablePath))
+        ExecutablePath = *P;
+    return std::string(ExecutablePath.str());
+  }
 
   // This just needs to be some symbol in the binary; C++ doesn't
   // allow taking the address of ::main however.
-  void *P = (void *)(intptr_t)GetExecutablePath;
+  void *P = (void*) (intptr_t) GetExecutablePath;
   return llvm::sys::fs::getMainExecutable(Argv0, P);
 }
 
-#ifdef LINK_POLLY_INTO_TOOLS
-namespace polly {
-void initializePollyPasses(llvm::PassRegistry &Registry);
-}
-#endif
-
 static const char *GetStableCStr(std::set<std::string> &SavedStrings,
                                  StringRef S) {
-  return SavedStrings.insert(S.str()).first->c_str();
+  return SavedStrings.insert(std::string(S)).first->c_str();
 }
 
 struct DriverSuffix {
@@ -185,7 +186,7 @@ static const DriverSuffix *FindDriverSuffix(StringRef ProgName) {
       {"++", "--driver-mode=g++"},
   };
 
-  for (size_t i = 0; i < llvm::array_lengthof(DriverSuffixes); ++i)
+  for (size_t i = 0; i < std::size(DriverSuffixes); ++i)
     if (ProgName.endswith(DriverSuffixes[i].Suffix))
       return &DriverSuffixes[i];
   return nullptr;
@@ -260,21 +261,77 @@ static void insertArgsFromProgramName(StringRef ProgName,
   }
 }
 
-static void SetBackdoorDriverOutputsFromEnvVars(Driver &TheDriver) {
-  // Handle CC_PRINT_OPTIONS and CC_PRINT_OPTIONS_FILE.
-  TheDriver.CCPrintOptions = !!::getenv("CC_PRINT_OPTIONS");
-  if (TheDriver.CCPrintOptions)
-    TheDriver.CCPrintOptionsFilename = ::getenv("CC_PRINT_OPTIONS_FILE");
+static void getCLEnvVarOptions(std::string &EnvValue, llvm::StringSaver &Saver,
+                               SmallVectorImpl<const char *> &Opts) {
+  llvm::cl::TokenizeWindowsCommandLine(EnvValue, Saver, Opts);
+  // The first instance of '#' should be replaced with '=' in each option.
+  for (const char *Opt : Opts)
+    if (char *NumberSignPtr = const_cast<char *>(::strchr(Opt, '#')))
+      *NumberSignPtr = '=';
+}
 
-  // Handle CC_PRINT_HEADERS and CC_PRINT_HEADERS_FILE.
-  TheDriver.CCPrintHeaders = !!::getenv("CC_PRINT_HEADERS");
-  if (TheDriver.CCPrintHeaders)
-    TheDriver.CCPrintHeadersFilename = ::getenv("CC_PRINT_HEADERS_FILE");
+template <class T>
+static T checkEnvVar(const char *EnvOptSet, const char *EnvOptFile,
+                     std::string &OptFile) {
+  const char *Str = ::getenv(EnvOptSet);
+  if (!Str)
+    return T{};
 
-  // Handle CC_LOG_DIAGNOSTICS and CC_LOG_DIAGNOSTICS_FILE.
-  TheDriver.CCLogDiagnostics = !!::getenv("CC_LOG_DIAGNOSTICS");
-  if (TheDriver.CCLogDiagnostics)
-    TheDriver.CCLogDiagnosticsFilename = ::getenv("CC_LOG_DIAGNOSTICS_FILE");
+  T OptVal = Str;
+  if (const char *Var = ::getenv(EnvOptFile))
+    OptFile = Var;
+  return OptVal;
+}
+
+static bool SetBackdoorDriverOutputsFromEnvVars(Driver &TheDriver) {
+  TheDriver.CCPrintOptions =
+      checkEnvVar<bool>("CC_PRINT_OPTIONS", "CC_PRINT_OPTIONS_FILE",
+                        TheDriver.CCPrintOptionsFilename);
+  if (checkEnvVar<bool>("CC_PRINT_HEADERS", "CC_PRINT_HEADERS_FILE",
+                        TheDriver.CCPrintHeadersFilename)) {
+    TheDriver.CCPrintHeadersFormat = HIFMT_Textual;
+    TheDriver.CCPrintHeadersFiltering = HIFIL_None;
+  } else {
+    std::string EnvVar = checkEnvVar<std::string>(
+        "CC_PRINT_HEADERS_FORMAT", "CC_PRINT_HEADERS_FILE",
+        TheDriver.CCPrintHeadersFilename);
+    if (!EnvVar.empty()) {
+      TheDriver.CCPrintHeadersFormat =
+          stringToHeaderIncludeFormatKind(EnvVar.c_str());
+      if (!TheDriver.CCPrintHeadersFormat) {
+        TheDriver.Diag(clang::diag::err_drv_print_header_env_var)
+            << 0 << EnvVar;
+        return false;
+      }
+
+      const char *FilteringStr = ::getenv("CC_PRINT_HEADERS_FILTERING");
+      HeaderIncludeFilteringKind Filtering;
+      if (!stringToHeaderIncludeFiltering(FilteringStr, Filtering)) {
+        TheDriver.Diag(clang::diag::err_drv_print_header_env_var)
+            << 1 << FilteringStr;
+        return false;
+      }
+
+      if ((TheDriver.CCPrintHeadersFormat == HIFMT_Textual &&
+           Filtering != HIFIL_None) ||
+          (TheDriver.CCPrintHeadersFormat == HIFMT_JSON &&
+           Filtering != HIFIL_Only_Direct_System)) {
+        TheDriver.Diag(clang::diag::err_drv_print_header_env_var_combination)
+            << EnvVar << FilteringStr;
+        return false;
+      }
+      TheDriver.CCPrintHeadersFiltering = Filtering;
+    }
+  }
+
+  TheDriver.CCLogDiagnostics =
+      checkEnvVar<bool>("CC_LOG_DIAGNOSTICS", "CC_LOG_DIAGNOSTICS_FILE",
+                        TheDriver.CCLogDiagnosticsFilename);
+  TheDriver.CCPrintProcessStats =
+      checkEnvVar<bool>("CC_PRINT_PROC_STAT", "CC_PRINT_PROC_STAT_FILE",
+                        TheDriver.CCPrintStatReportFilename);
+
+  return true;
 }
 
 static void FixupDiagPrefixExeName(TextDiagnosticPrinter *DiagClient,
@@ -484,86 +541,123 @@ static void ExecuteTemplightCommand(
 }
 
 int main(int argc_, const char **argv_) {
-  llvm::sys::PrintStackTraceOnErrorSignal(argv_[0]);
-  llvm::PrettyStackTraceProgram X(argc_, argv_);
+  llvm::InitLLVM X(argc_, argv_);
 
   if (llvm::sys::Process::FixupStandardFileDescriptors())
     return 1;
 
-  SmallVector<const char *, 256> argv(argv_, argv_ + argc_);
+  SmallVector<const char *, 256> Args(argv_, argv_ + argc_);
 
-  std::string ProgName = normalizeProgramName(argv[0]);
+  std::string ProgName = normalizeProgramName(Args[0]);
   const DriverSuffix *DS = parseDriverSuffix(ProgName);
 
   llvm::BumpPtrAllocator A;
   llvm::StringSaver Saver(A);
 
   // Parse response files using the GNU syntax, unless we're in CL mode. There
-  // are two ways to put clang in CL compatibility mode: argv[0] is either
+  // are two ways to put clang in CL compatibility mode: Args[0] is either
   // clang-cl or cl, or --driver-mode=cl is on the command line. The normal
   // command line parsing can't happen until after response file parsing, so we
   // have to manually search for a --driver-mode=cl argument the hard way.
   // Finally, our -cc1 tools don't care which tokenization mode we use because
   // response files written by clang will tokenize the same way in either mode.
-  llvm::cl::TokenizerCallback Tokenizer = &llvm::cl::TokenizeGNUCommandLine;
-  if ((DS && DS->ModeFlag && strcmp(DS->ModeFlag, "--driver-mode=cl") == 0) ||
-      std::find_if(argv.begin(), argv.end(), [](const char *F) {
-        return F && strcmp(F, "--driver-mode=cl") == 0;
-      }) != argv.end()) {
-    Tokenizer = &llvm::cl::TokenizeWindowsCommandLine;
+  bool ClangCLMode =
+      IsClangCL(getDriverMode(ProgName, llvm::ArrayRef(Args).slice(1)));
+
+  enum { Default, POSIX, Windows } RSPQuoting = Default;
+  for (const char *F : Args) {
+    if (strcmp(F, "--rsp-quoting=posix") == 0)
+      RSPQuoting = POSIX;
+    else if (strcmp(F, "--rsp-quoting=windows") == 0)
+      RSPQuoting = Windows;
   }
 
-  // Determines whether we want nullptr markers in argv to indicate response
+  bool MarkEOLs = ClangCLMode;
+
+  llvm::cl::TokenizerCallback Tokenizer;
+  if (RSPQuoting == Windows || (RSPQuoting == Default && ClangCLMode))
+    Tokenizer = &llvm::cl::TokenizeWindowsCommandLine;
+  else
+    Tokenizer = &llvm::cl::TokenizeGNUCommandLine;
+
+  // Determines whether we want nullptr markers in Args to indicate response
   // files end-of-lines. We only use this for the /LINK driver argument.
-  bool MarkEOLs = true;
-  if (argv.size() > 1 && StringRef(argv[1]).startswith("-cc1"))
+  if (MarkEOLs && Args.size() > 1 && StringRef(Args[1]).startswith("-cc1"))
     MarkEOLs = false;
-  llvm::cl::ExpandResponseFiles(Saver, Tokenizer, argv, MarkEOLs);
+  llvm::cl::ExpansionContext ECtx(A, Tokenizer);
+  ECtx.setMarkEOLs(MarkEOLs);
+  if (llvm::Error Err = ECtx.expandResponseFiles(Args)) {
+    llvm::errs() << toString(std::move(Err)) << '\n';
+    return 1;
+  }
+
+  // Handle CL and _CL_ which permits additional command line options to be
+  // prepended or appended.
+  if (ClangCLMode) {
+    // Arguments in "CL" are prepended.
+    std::optional<std::string> OptCL = llvm::sys::Process::GetEnv("CL");
+    if (OptCL) {
+      SmallVector<const char *, 8> PrependedOpts;
+      getCLEnvVarOptions(*OptCL, Saver, PrependedOpts);
+
+      // Insert right after the program name to prepend to the argument list.
+      Args.insert(Args.begin() + 1, PrependedOpts.begin(), PrependedOpts.end());
+    }
+    // Arguments in "_CL_" are appended.
+    std::optional<std::string> Opt_CL_ = llvm::sys::Process::GetEnv("_CL_");
+    if (Opt_CL_) {
+      SmallVector<const char *, 8> AppendedOpts;
+      getCLEnvVarOptions(*Opt_CL_, Saver, AppendedOpts);
+
+      // Insert at the end of the argument list to append.
+      Args.append(AppendedOpts.begin(), AppendedOpts.end());
+    }
+  }
 
   // Separate out templight and clang flags.  templight flags are "-Xtemplight
   // <templight_flag>"
-  SmallVector<const char *, 256> templight_argv, clang_argv;
-  templight_argv.push_back(argv[0]);
-  clang_argv.push_back(argv[0]);
-  for (int i = 1, size = argv.size(); i < size; /* in loop */) {
-    if ((argv[i] != nullptr) && (strcmp(argv[i], "-Xtemplight") == 0)) {
-      while (i < size - 1 && argv[++i] == nullptr) /* skip EOLs */
+  SmallVector<const char *, 256> TemplightArgs, ClangArgs;
+  TemplightArgs.push_back(Args[0]);
+  ClangArgs.push_back(Args[0]);
+  for (int i = 1, size = Args.size(); i < size; /* in loop */) {
+    if ((Args[i] != nullptr) && (strcmp(Args[i], "-Xtemplight") == 0)) {
+      while (i < size - 1 && Args[++i] == nullptr) /* skip EOLs */
         ;
-      templight_argv.push_back(argv[i]); // the word after -Xtemplight
+      TemplightArgs.push_back(Args[i]); // the word after -Xtemplight
       if (i == size - 1)                 // was this the last argument?
         break;
-      while (i < size - 1 && argv[++i] == nullptr) /* skip EOLs */
+      while (i < size - 1 && Args[++i] == nullptr) /* skip EOLs */
         ;
     } else {
-      if ((argv[i] != nullptr) && ((strcmp(argv[i], "-help") == 0) ||
-                                   (strcmp(argv[i], "--help") == 0))) {
+      if ((Args[i] != nullptr) && ((strcmp(Args[i], "-help") == 0) ||
+                                   (strcmp(Args[i], "--help") == 0))) {
         // Print the help for the templight options:
         PrintTemplightHelp();
       }
-      clang_argv.push_back(
-          argv[i++]); // also leave -help to driver (to print its help info too)
+      ClangArgs.push_back(
+          Args[i++]); // also leave -help to driver (to print its help info too)
     }
   }
 
   cl::ParseCommandLineOptions(
-      templight_argv.size(), &templight_argv[0],
+      TemplightArgs.size(), &TemplightArgs[0],
       "A tool to profile template instantiations in C++ code.\n");
 
   bool CanonicalPrefixes = true;
-  for (int i = 1, size = clang_argv.size(); i < size; ++i) {
+  for (int i = 1, size = ClangArgs.size(); i < size; ++i) {
     // Skip end-of-line response file markers
-    if (clang_argv[i] == nullptr)
+    if (ClangArgs[i] == nullptr)
       continue;
-    if (StringRef(clang_argv[i]) == "-no-canonical-prefixes") {
+    if (StringRef(ClangArgs[i]) == "-canonical-prefixes")
+      CanonicalPrefixes = true;
+    else if (StringRef(ClangArgs[i]) == "-no-canonical-prefixes")
       CanonicalPrefixes = false;
-      break;
-    }
   }
 
-  std::string Path = GetExecutablePath(clang_argv[0], CanonicalPrefixes);
+  std::string Path = GetExecutablePath(ClangArgs[0], CanonicalPrefixes);
 
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts =
-      ::CreateAndPopulateDiagOpts(clang_argv);
+      ::CreateAndPopulateDiagOpts(ClangArgs);
 
   TextDiagnosticPrinter *DiagClient =
       new TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
@@ -593,42 +687,36 @@ int main(int argc_, const char **argv_) {
   llvm::InitializeAllAsmPrinters();
   llvm::InitializeAllAsmParsers();
 
-#ifdef LINK_POLLY_INTO_TOOLS
-  llvm::PassRegistry &Registry = *llvm::PassRegistry::getPassRegistry();
-  polly::initializePollyPasses(Registry);
-#endif
-
   // Handle -cc1 integrated tools, even if -cc1 was expanded from a response
   // file.
-  auto FirstArg = std::find_if(clang_argv.begin() + 1, clang_argv.end(),
+  auto FirstArg = std::find_if(ClangArgs.begin() + 1, ClangArgs.end(),
                                [](const char *A) { return A != nullptr; });
   bool invokeCC1 =
-      (FirstArg != clang_argv.end() && StringRef(*FirstArg).startswith("-cc1"));
+      (FirstArg != ClangArgs.end() && StringRef(*FirstArg).startswith("-cc1"));
   if (invokeCC1) {
     // If -cc1 came from a response file, remove the EOL sentinels.
     if (MarkEOLs) {
-      auto newEnd = std::remove(clang_argv.begin(), clang_argv.end(), nullptr);
-      clang_argv.resize(newEnd - clang_argv.begin());
+      auto newEnd = std::remove(ClangArgs.begin(), ClangArgs.end(), nullptr);
+      ClangArgs.resize(newEnd - ClangArgs.begin());
     }
 
     std::unique_ptr<CompilerInstance> Clang(new CompilerInstance());
 
     Res = !CompilerInvocation::CreateFromArgs(Clang->getInvocation(),
-                                              ArrayRef<const char *>(clang_argv.data() + 2, clang_argv.data() + clang_argv.size()),
+                                              ArrayRef<const char *>(ClangArgs.data() + 2, ClangArgs.data() + ClangArgs.size()),
                                               Diags);
 
     // Infer the builtin include path if unspecified.
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
         Clang->getHeaderSearchOpts().ResourceDir.empty())
       Clang->getHeaderSearchOpts().ResourceDir =
-          CompilerInvocation::GetResourcesPath(clang_argv[0],
+          CompilerInvocation::GetResourcesPath(ClangArgs[0],
                                                GetExecutablePathVP);
 
     // Create the compilers actual diagnostics engine.
     Clang->createDiagnostics();
     if (!Clang->hasDiagnostics()) {
-      Res = 1;
-      goto cleanup;
+      return 1;
     }
 
     LocalOutputFilename = OutputFilename;
@@ -647,22 +735,23 @@ int main(int argc_, const char **argv_) {
 
     Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags);
     TheDriver.setTitle("templight");
-    SetInstallDir(clang_argv, TheDriver);
+    SetInstallDir(ClangArgs, TheDriver);
 
     std::set<std::string> SavedStrings;
-    insertArgsFromProgramName(ProgName, DS, clang_argv, SavedStrings);
+    insertArgsFromProgramName(ProgName, DS, ClangArgs, SavedStrings);
 
-    SetBackdoorDriverOutputsFromEnvVars(TheDriver);
+    if (!SetBackdoorDriverOutputsFromEnvVars(TheDriver)) {
+      return 1;
+    }
 
-    std::unique_ptr<Compilation> C(TheDriver.BuildCompilation(clang_argv));
+    std::unique_ptr<Compilation> C(TheDriver.BuildCompilation(ClangArgs));
     if (!C.get()) {
-      Res = 1;
-      goto cleanup;
+      return 1;
     }
 
     SmallVector<std::pair<int, const Command *>, 4> FailingCommands;
     for (auto &J : C->getJobs())
-      ExecuteTemplightCommand(TheDriver, Diags, *C, J, clang_argv[0],
+      ExecuteTemplightCommand(TheDriver, Diags, *C, J, ClangArgs[0],
                               FailingCommands);
 
     // Merge all the temp files into a single output file:
@@ -736,13 +825,9 @@ int main(int argc_, const char **argv_) {
     }
   }
 
-cleanup:
-
   // If any timers were active but haven't been destroyed yet, print their
   // results now.  This happens in -disable-free mode.
   llvm::TimerGroup::printAll(llvm::errs());
-
-  llvm::llvm_shutdown();
 
 #ifdef LLVM_ON_WIN32
   // Exit status should not be negative on Win32, unless abnormal termination.
