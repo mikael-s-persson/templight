@@ -80,6 +80,9 @@ Templight must be compiled from source, alongside the Clang source code.
 
 5. If successful, there should be a `templight` and a `templight++` executable in the build/bin folder.
 
+**NOTE**: You do not need to apply the patch `templight_clang_patch.diff` and you can ignore the corresponding
+version numbers in `templight_clang_version.txt`. Those are meant for other uses case (testing some hooks within clang).
+
 
 ### Invoking Templight
 
