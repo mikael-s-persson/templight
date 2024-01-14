@@ -84,9 +84,8 @@ inline double loadDouble(StringRef &p_buf) {
   std::memcpy(reinterpret_cast<char *>(&tmp), p_buf.data(),
               sizeof(double_to_ulong));
   p_buf = p_buf.drop_front(sizeof(double_to_ulong));
-  tmp.ui64 =
-      llvm::support::endian::byte_swap<std::uint64_t, llvm::endianness::little>(
-          tmp.ui64);
+  tmp.ui64 = llvm::support::endian::byte_swap<
+      std::uint64_t, llvm::support::endianness::little>(tmp.ui64);
   return tmp.d;
 }
 
@@ -103,9 +102,8 @@ inline float loadFloat(StringRef &p_buf) {
   std::memcpy(reinterpret_cast<char *>(&tmp), p_buf.data(),
               sizeof(float_to_ulong));
   p_buf = p_buf.drop_front(sizeof(float_to_ulong));
-  tmp.ui32 =
-      llvm::support::endian::byte_swap<std::uint32_t, llvm::endianness::little>(
-          tmp.ui32);
+  tmp.ui32 = llvm::support::endian::byte_swap<
+      std::uint32_t, llvm::support::endianness::little>(tmp.ui32);
   return tmp.f;
 }
 
@@ -211,9 +209,8 @@ inline void saveSInt(llvm::raw_ostream &OS, unsigned int tag, std::int64_t i) {
 
 inline void saveDouble(llvm::raw_ostream &OS, double d) {
   double_to_ulong tmp = {d};
-  tmp.ui64 =
-      llvm::support::endian::byte_swap<std::uint64_t, llvm::endianness::little>(
-          tmp.ui64);
+  tmp.ui64 = llvm::support::endian::byte_swap<
+      std::uint64_t, llvm::support::endianness::little>(tmp.ui64);
   OS.write(reinterpret_cast<char *>(&tmp), sizeof(double_to_ulong));
 }
 
@@ -224,9 +221,8 @@ inline void saveDouble(llvm::raw_ostream &OS, unsigned int tag, double d) {
 
 inline void saveFloat(llvm::raw_ostream &OS, float d) {
   float_to_ulong tmp = {d};
-  tmp.ui32 =
-      llvm::support::endian::byte_swap<std::uint32_t, llvm::endianness::little>(
-          tmp.ui32);
+  tmp.ui32 = llvm::support::endian::byte_swap<
+      std::uint32_t, llvm::support::endianness::little>(tmp.ui32);
   OS.write(reinterpret_cast<char *>(&tmp), sizeof(float_to_ulong));
 }
 
