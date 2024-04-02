@@ -195,9 +195,13 @@ public:
 
   void startTrace() {
     // get the source name from the source manager:
+    std::string src_name = "a";
     FileID fileID = TheSema.getSourceManager().getMainFileID();
-    std::string src_name =
-        TheSema.getSourceManager().getFileEntryForID(fileID)->getName().str();
+    OptionalFileEntryRef file_ref =
+        TheSema.getSourceManager().getFileEntryRefForID(fileID);
+    if (file_ref.has_value()) {
+      src_name = file_ref->getName().str();
+    }
     initialize(src_name);
   };
 

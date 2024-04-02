@@ -15,6 +15,7 @@
 
 #include "clang/Basic/CharInfo.h"
 #include "clang/Basic/DiagnosticOptions.h"
+#include "clang/Config/config.h"
 #include "clang/Driver/Action.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/Driver.h"
@@ -130,13 +131,15 @@ void PrintTemplightHelp() {
   const std::size_t TemplightOptNum =
       sizeof(TemplightOptions) / sizeof(cl::Option *);
   std::size_t MaxArgLen = 0;
-  for (std::size_t i = 0, e = TemplightOptNum; i != e; ++i)
+  for (std::size_t i = 0, e = TemplightOptNum; i != e; ++i) {
     MaxArgLen = std::max(MaxArgLen, TemplightOptions[i]->getOptionWidth());
+  }
 
   llvm::outs() << '\n' << ClangTemplightCategory.getName() << "\n\n";
 
-  for (std::size_t i = 0, e = TemplightOptNum; i != e; ++i)
+  for (std::size_t i = 0, e = TemplightOptNum; i != e; ++i) {
     TemplightOptions[i]->printOptionInfo(MaxArgLen);
+  }
   llvm::outs() << '\n';
 }
 
@@ -144,10 +147,12 @@ std::string GetExecutablePath(const char *Argv0, bool CanonicalPrefixes) {
   if (!CanonicalPrefixes) {
     SmallString<128> ExecutablePath(Argv0);
     // Do a PATH lookup if Argv0 isn't a valid path.
-    if (!llvm::sys::fs::exists(ExecutablePath))
+    if (!llvm::sys::fs::exists(ExecutablePath)) {
       if (llvm::ErrorOr<std::string> P =
-              llvm::sys::findProgramByName(ExecutablePath))
+              llvm::sys::findProgramByName(ExecutablePath)) {
         ExecutablePath = *P;
+      }
+    }
     return std::string(ExecutablePath.str());
   }
 
@@ -157,9 +162,8 @@ std::string GetExecutablePath(const char *Argv0, bool CanonicalPrefixes) {
   return llvm::sys::fs::getMainExecutable(Argv0, P);
 }
 
-static const char *GetStableCStr(std::set<std::string> &SavedStrings,
-                                 StringRef S) {
-  return SavedStrings.insert(std::string(S)).first->c_str();
+static const char *GetStableCStr(llvm::StringSet<> &SavedStrings, StringRef S) {
+  return SavedStrings.insert(S).first->getKeyData();
 }
 
 struct DriverSuffix {
@@ -167,7 +171,7 @@ struct DriverSuffix {
   const char *ModeFlag;
 };
 
-static const DriverSuffix *FindDriverSuffix(StringRef ProgName) {
+static const DriverSuffix *FindDriverSuffix(StringRef ProgName, size_t &Pos) {
   // A list of known driver suffixes. Suffixes are compared against the
   // program name in order. If there is a match, the frontend type if updated as
   // necessary by applying the ModeFlag.
@@ -186,78 +190,106 @@ static const DriverSuffix *FindDriverSuffix(StringRef ProgName) {
       {"++", "--driver-mode=g++"},
   };
 
-  for (size_t i = 0; i < std::size(DriverSuffixes); ++i)
-    if (ProgName.endswith(DriverSuffixes[i].Suffix))
-      return &DriverSuffixes[i];
+  for (const auto &DS : DriverSuffixes) {
+    StringRef Suffix(DS.Suffix);
+    if (ProgName.ends_with(Suffix)) {
+      Pos = ProgName.size() - Suffix.size();
+      return &DS;
+    }
+  }
   return nullptr;
 }
 
 /// Normalize the program name from argv[0] by stripping the file extension if
 /// present and lower-casing the string on Windows.
-static std::string normalizeProgramName(const char *Argv0) {
-  std::string ProgName = llvm::sys::path::stem(Argv0).str();
-#ifdef LLVM_ON_WIN32
-  // Transform to lowercase for case insensitive file systems.
-  std::transform(ProgName.begin(), ProgName.end(), ProgName.begin(), ::tolower);
-#endif
+static std::string normalizeProgramName(llvm::StringRef Argv0) {
+  std::string ProgName = std::string(llvm::sys::path::filename(Argv0));
+  if (is_style_windows(llvm::sys::path::Style::native)) {
+    // Transform to lowercase for case insensitive file systems.
+    std::transform(ProgName.begin(), ProgName.end(), ProgName.begin(),
+                   ::tolower);
+  }
   return ProgName;
 }
 
-static const DriverSuffix *parseDriverSuffix(StringRef ProgName) {
+static const DriverSuffix *parseDriverSuffix(StringRef ProgName, size_t &Pos) {
   // Try to infer frontend type and default target from the program name by
   // comparing it against DriverSuffixes in order.
 
   // If there is a match, the function tries to identify a target as prefix.
   // E.g. "x86_64-linux-clang" as interpreted as suffix "clang" with target
-  // prefix "x86_64-linux". If such a target prefix is found, is gets added via
-  // -target as implicit first argument.
-  const DriverSuffix *DS = FindDriverSuffix(ProgName);
+  // prefix "x86_64-linux". If such a target prefix is found, it may be
+  // added via -target as implicit first argument.
+  const DriverSuffix *DS = FindDriverSuffix(ProgName, Pos);
+
+  if (!DS && ProgName.ends_with(".exe")) {
+    // Try again after stripping the executable suffix:
+    // clang++.exe -> clang++
+    ProgName = ProgName.drop_back(StringRef(".exe").size());
+    DS = FindDriverSuffix(ProgName, Pos);
+  }
 
   if (!DS) {
     // Try again after stripping any trailing version number:
     // clang++3.5 -> clang++
     ProgName = ProgName.rtrim("0123456789.");
-    DS = FindDriverSuffix(ProgName);
+    DS = FindDriverSuffix(ProgName, Pos);
   }
 
   if (!DS) {
     // Try again after stripping trailing -component.
     // clang++-tot -> clang++
     ProgName = ProgName.slice(0, ProgName.rfind('-'));
-    DS = FindDriverSuffix(ProgName);
+    DS = FindDriverSuffix(ProgName, Pos);
   }
   return DS;
 }
 
-static void insertArgsFromProgramName(StringRef ProgName,
-                                      const DriverSuffix *DS,
-                                      SmallVectorImpl<const char *> &ArgVector,
-                                      std::set<std::string> &SavedStrings) {
+ParsedClangName getTargetAndModeFromProgramName(StringRef PN) {
+  std::string ProgName = normalizeProgramName(PN);
+  size_t SuffixPos;
+  const DriverSuffix *DS = parseDriverSuffix(ProgName, SuffixPos);
   if (!DS)
-    return;
+    return {};
+  size_t SuffixEnd = SuffixPos + strlen(DS->Suffix);
 
-  if (const char *Flag = DS->ModeFlag) {
-    // Add Flag to the arguments.
-    auto it = ArgVector.begin();
-    if (it != ArgVector.end())
-      ++it;
-    ArgVector.insert(it, Flag);
-  }
-
-  StringRef::size_type LastComponent =
-      ProgName.rfind('-', ProgName.size() - strlen(DS->Suffix));
-  if (LastComponent == StringRef::npos)
-    return;
+  size_t LastComponent = ProgName.rfind('-', SuffixPos);
+  if (LastComponent == std::string::npos)
+    return ParsedClangName(ProgName.substr(0, SuffixEnd), DS->ModeFlag);
+  std::string ModeSuffix = ProgName.substr(LastComponent + 1,
+                                           SuffixEnd - LastComponent - 1);
 
   // Infer target from the prefix.
-  StringRef Prefix = ProgName.slice(0, LastComponent);
+  StringRef Prefix(ProgName);
+  Prefix = Prefix.slice(0, LastComponent);
   std::string IgnoredError;
-  if (llvm::TargetRegistry::lookupTarget(Prefix.str(), IgnoredError)) {
-    auto it = ArgVector.begin();
-    if (it != ArgVector.end())
-      ++it;
-    const char *arr[] = {"-target", GetStableCStr(SavedStrings, Prefix)};
-    ArgVector.insert(it, std::begin(arr), std::end(arr));
+  bool IsRegistered =
+      llvm::TargetRegistry::lookupTarget(std::string(Prefix), IgnoredError);
+  return ParsedClangName{std::string(Prefix), ModeSuffix, DS->ModeFlag,
+                         IsRegistered};
+}
+
+static void insertTargetAndModeArgs(const ParsedClangName &NameParts,
+                                    SmallVectorImpl<const char *> &ArgVector,
+                                    llvm::StringSet<> &SavedStrings) {
+  // Put target and mode arguments at the start of argument list so that
+  // arguments specified in command line could override them. Avoid putting
+  // them at index 0, as an option like '-cc1' must remain the first.
+  int InsertionPoint = 0;
+  if (ArgVector.size() > 0)
+    ++InsertionPoint;
+
+  if (NameParts.DriverMode) {
+    // Add the mode flag to the arguments.
+    ArgVector.insert(ArgVector.begin() + InsertionPoint,
+                     GetStableCStr(SavedStrings, NameParts.DriverMode));
+  }
+
+  if (NameParts.TargetIsValid) {
+    const char *arr[] = {"-target", GetStableCStr(SavedStrings,
+                                                  NameParts.TargetPrefix)};
+    ArgVector.insert(ArgVector.begin() + InsertionPoint,
+                     std::begin(arr), std::end(arr));
   }
 }
 
@@ -265,21 +297,25 @@ static void getCLEnvVarOptions(std::string &EnvValue, llvm::StringSaver &Saver,
                                SmallVectorImpl<const char *> &Opts) {
   llvm::cl::TokenizeWindowsCommandLine(EnvValue, Saver, Opts);
   // The first instance of '#' should be replaced with '=' in each option.
-  for (const char *Opt : Opts)
-    if (char *NumberSignPtr = const_cast<char *>(::strchr(Opt, '#')))
+  for (const char *Opt : Opts) {
+    if (char *NumberSignPtr = const_cast<char *>(::strchr(Opt, '#'))) {
       *NumberSignPtr = '=';
+    }
+  }
 }
 
 template <class T>
 static T checkEnvVar(const char *EnvOptSet, const char *EnvOptFile,
                      std::string &OptFile) {
   const char *Str = ::getenv(EnvOptSet);
-  if (!Str)
+  if (!Str) {
     return T{};
+  }
 
   T OptVal = Str;
-  if (const char *Var = ::getenv(EnvOptFile))
+  if (const char *Var = ::getenv(EnvOptFile)) {
     OptFile = Var;
+  }
   return OptVal;
 }
 
@@ -330,6 +366,9 @@ static bool SetBackdoorDriverOutputsFromEnvVars(Driver &TheDriver) {
   TheDriver.CCPrintProcessStats =
       checkEnvVar<bool>("CC_PRINT_PROC_STAT", "CC_PRINT_PROC_STAT_FILE",
                         TheDriver.CCPrintStatReportFilename);
+  TheDriver.CCPrintInternalStats =
+      checkEnvVar<bool>("CC_PRINT_INTERNAL_STAT", "CC_PRINT_INTERNAL_STAT_FILE",
+                        TheDriver.CCPrintInternalStatReportFilename);
 
   return true;
 }
@@ -340,50 +379,10 @@ static void FixupDiagPrefixExeName(TextDiagnosticPrinter *DiagClient,
   // reasons, use templight-cl.exe as the prefix to avoid confusion between
   // templight and MSVC.
   StringRef ExeBasename(llvm::sys::path::filename(Path));
-  if (ExeBasename.equals_insensitive("cl.exe"))
+  if (ExeBasename.equals_insensitive("cl.exe")) {
     ExeBasename = "templight-cl.exe";
-  DiagClient->setPrefix(ExeBasename.str());
-}
-
-// This lets us create the DiagnosticsEngine with a properly-filled-out
-// DiagnosticOptions instance.
-static DiagnosticOptions *
-CreateAndPopulateDiagOpts(ArrayRef<const char *> argv) {
-  auto *DiagOpts = new DiagnosticOptions;
-  getDriverOptTable();
-  const OptTable& Opts(getDriverOptTable());
-  unsigned MissingArgIndex, MissingArgCount;
-  InputArgList Args =
-      Opts.ParseArgs(argv.slice(1), MissingArgIndex, MissingArgCount);
-  // We ignore MissingArgCount and the return value of ParseDiagnosticArgs.
-  // Any errors that would be diagnosed here will also be diagnosed later,
-  // when the DiagnosticsEngine actually exists.
-  (void)ParseDiagnosticArgs(*DiagOpts, Args);
-  return DiagOpts;
-}
-
-static void SetInstallDir(SmallVectorImpl<const char *> &argv,
-                          Driver &TheDriver) {
-  // Attempt to find the original path used to invoke the driver, to determine
-  // the installed path. We do this manually, because we want to support that
-  // path being a symlink.
-  SmallString<128> InstalledPath(argv[0]);
-
-  // Do a PATH lookup, if there are no directory components.
-  if (llvm::sys::path::filename(InstalledPath) == InstalledPath) {
-    std::string Tmp = llvm::sys::findProgramByName(
-                          llvm::sys::path::filename(InstalledPath.str()))
-                          .get();
-    if (!Tmp.empty())
-      InstalledPath = Tmp;
   }
-  llvm::sys::fs::make_absolute(InstalledPath);
-
-  // TODO: SmallString::assign asserts here for some reason, so change to a
-  // StringRef. We should debug, or at least understand why thats happening.
-  StringRef Tmp = llvm::sys::path::parent_path(InstalledPath);
-  if (llvm::sys::fs::exists(Tmp))
-    TheDriver.setInstalledDir(Tmp);
+  DiagClient->setPrefix(ExeBasename.str());
 }
 
 static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
@@ -432,14 +431,6 @@ static int ExecuteTemplightInvocation(CompilerInstance *Clang) {
     llvm::cl::ParseCommandLineOptions(NumArgs + 1, Args.data());
   }
 
-#ifdef CLANG_ENABLE_STATIC_ANALYZER
-  // Honor -analyzer-checker-help.
-  // This should happen AFTER plugins have been loaded!
-  if (Clang->getAnalyzerOpts()->ShowCheckerHelp) {
-    ento::printCheckerHelp(llvm::outs(), Clang->getFrontendOpts().Plugins);
-    return 0;
-  }
-#endif
   // If there were errors in processing arguments, don't do anything else.
   if (Clang->getDiagnostics().hasErrorOccurred())
     return 1;
@@ -519,10 +510,7 @@ static void ExecuteTemplightCommand(
     std::string TemplightOutFile = TemplightAction::CreateOutputFilename(
         Clang.get(), "", InstProfiler, OutputToStdOut, MemoryProfile);
     // Check if templight filename is in a temporary path:
-    llvm::SmallString<128> TDir;
-    llvm::sys::path::system_temp_directory(true, TDir);
-    if (TDir.equals(
-            llvm::sys::path::parent_path(llvm::StringRef(TemplightOutFile)))) {
+    if (Clang->getFrontendOpts().UseTemporary) {
       C.addTempFile(TemplightOutFile.c_str());
       TempOutputFiles.push_back(TemplightOutFile);
     }
@@ -548,8 +536,7 @@ int main(int argc_, const char **argv_) {
 
   SmallVector<const char *, 256> Args(argv_, argv_ + argc_);
 
-  std::string ProgName = normalizeProgramName(Args[0]);
-  const DriverSuffix *DS = parseDriverSuffix(ProgName);
+  auto TargetAndMode = getTargetAndModeFromProgramName(Args[0]);
 
   llvm::BumpPtrAllocator A;
   llvm::StringSaver Saver(A);
@@ -561,8 +548,7 @@ int main(int argc_, const char **argv_) {
   // have to manually search for a --driver-mode=cl argument the hard way.
   // Finally, our -cc1 tools don't care which tokenization mode we use because
   // response files written by clang will tokenize the same way in either mode.
-  bool ClangCLMode =
-      IsClangCL(getDriverMode(ProgName, llvm::ArrayRef(Args).slice(1)));
+  bool ClangCLMode = llvm::StringRef(TargetAndMode.DriverMode).ends_with("cl");
 
   enum { Default, POSIX, Windows } RSPQuoting = Default;
   for (const char *F : Args) {
@@ -582,7 +568,7 @@ int main(int argc_, const char **argv_) {
 
   // Determines whether we want nullptr markers in Args to indicate response
   // files end-of-lines. We only use this for the /LINK driver argument.
-  if (MarkEOLs && Args.size() > 1 && StringRef(Args[1]).startswith("-cc1"))
+  if (MarkEOLs && Args.size() > 1 && StringRef(Args[1]).starts_with("-cc1"))
     MarkEOLs = false;
   llvm::cl::ExpansionContext ECtx(A, Tokenizer);
   ECtx.setMarkEOLs(MarkEOLs);
@@ -612,6 +598,14 @@ int main(int argc_, const char **argv_) {
       // Insert at the end of the argument list to append.
       Args.append(AppendedOpts.begin(), AppendedOpts.end());
     }
+  }
+
+  llvm::StringSet<> SavedStrings;
+  // Handle CCC_OVERRIDE_OPTIONS, used for editing a command line behind the
+  // scenes.
+  if (const char *OverrideStr = ::getenv("CCC_OVERRIDE_OPTIONS")) {
+    // FIXME: Driver shouldn't take extra initial argument.
+    clang::driver::applyOverrideOptions(Args, OverrideStr, SavedStrings, &llvm::errs());
   }
 
   // Separate out templight and clang flags.  templight flags are "-Xtemplight
@@ -657,7 +651,7 @@ int main(int argc_, const char **argv_) {
   std::string Path = GetExecutablePath(ClangArgs[0], CanonicalPrefixes);
 
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts =
-      ::CreateAndPopulateDiagOpts(ClangArgs);
+      CreateAndPopulateDiagOpts(ClangArgs);
 
   TextDiagnosticPrinter *DiagClient =
       new TextDiagnosticPrinter(llvm::errs(), &*DiagOpts);
@@ -680,8 +674,6 @@ int main(int argc_, const char **argv_) {
   // Prepare a variable for the return value:
   int Res = 0;
 
-  void *GetExecutablePathVP = (void *)(intptr_t)GetExecutablePath;
-
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
   llvm::InitializeAllAsmPrinters();
@@ -692,7 +684,7 @@ int main(int argc_, const char **argv_) {
   auto FirstArg = std::find_if(ClangArgs.begin() + 1, ClangArgs.end(),
                                [](const char *A) { return A != nullptr; });
   bool invokeCC1 =
-      (FirstArg != ClangArgs.end() && StringRef(*FirstArg).startswith("-cc1"));
+      (FirstArg != ClangArgs.end() && StringRef(*FirstArg).starts_with("-cc1"));
   if (invokeCC1) {
     // If -cc1 came from a response file, remove the EOL sentinels.
     if (MarkEOLs) {
@@ -707,6 +699,7 @@ int main(int argc_, const char **argv_) {
                                               Diags);
 
     // Infer the builtin include path if unspecified.
+    void *GetExecutablePathVP = (void *)(intptr_t)GetExecutablePath;
     if (Clang->getHeaderSearchOpts().UseBuiltinIncludes &&
         Clang->getHeaderSearchOpts().ResourceDir.empty())
       Clang->getHeaderSearchOpts().ResourceDir =
@@ -735,10 +728,9 @@ int main(int argc_, const char **argv_) {
 
     Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags);
     TheDriver.setTitle("templight");
-    SetInstallDir(ClangArgs, TheDriver);
 
-    std::set<std::string> SavedStrings;
-    insertArgsFromProgramName(ProgName, DS, ClangArgs, SavedStrings);
+    TheDriver.setTargetAndMode(TargetAndMode);
+    insertTargetAndModeArgs(TargetAndMode, ClangArgs, SavedStrings);
 
     if (!SetBackdoorDriverOutputsFromEnvVars(TheDriver)) {
       return 1;

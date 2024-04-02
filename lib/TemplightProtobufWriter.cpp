@@ -124,7 +124,7 @@ TemplightProtobufWriter::createDictionaryEntry(const std::string &NameOrig) {
       if (*it == '<') {
         // check for "operator<<", "operator<" and "operator<="
         llvm::StringRef test_str(Name.data(), it - Name.begin() + 1);
-        if (test_str.endswith("operator<")) {
+        if (test_str.ends_with("operator<")) {
           it_open = Name.end();
           srch_state = 0;
         } else {
@@ -149,7 +149,7 @@ TemplightProtobufWriter::createDictionaryEntry(const std::string &NameOrig) {
       if (*it == '<') {
         // check for "operator<<" and "operator<"
         llvm::StringRef test_str(Name.data(), it - Name.begin() + 1);
-        if (test_str.endswith("operator<<<")) {
+        if (test_str.ends_with("operator<<<")) {
           it_open = it;
           srch_state = 1;
         } else {

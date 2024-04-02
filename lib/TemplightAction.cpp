@@ -40,12 +40,14 @@ std::string TemplightAction::CreateOutputFilename(
     bool OptInstProfiler, bool OptOutputToStdOut, bool OptMemoryProfile) {
   std::string result;
 
-  if (!OptInstProfiler)
+  if (!OptInstProfiler) {
     return result; // no need for an output-filename.
+  }
 
   if (OptOutputToStdOut) {
     return "-";
-  } else if (CI && OptOutputName.empty()) {
+  }
+  if (CI && OptOutputName.empty()) {
     result = CI->getFrontendOpts().OutputFile;
   } else {
     result = OptOutputName;
@@ -56,7 +58,13 @@ std::string TemplightAction::CreateOutputFilename(
     // then, derive output name from the input name:
     if (CI->hasSourceManager()) {
       FileID fileID = CI->getSourceManager().getMainFileID();
-      result = CI->getSourceManager().getFileEntryForID(fileID)->getName().str();
+      OptionalFileEntryRef file_ref =
+          CI->getSourceManager().getFileEntryRefForID(fileID);
+      if (file_ref.has_value()) {
+        result = file_ref->getName().str();
+      } else {// or, last resort:
+        result = "a";
+      }
     } else { // or, last resort:
       result = "a";
     }

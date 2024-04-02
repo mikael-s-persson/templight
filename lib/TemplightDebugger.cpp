@@ -254,6 +254,26 @@ public:
             break;
           }
 
+          case TemplateArgument::StructuralValue: {
+            if (QueryKind & LookForValue) {
+              if (!cur_result.Name.empty()) {
+                cur_result.Name += " with value ";
+              }
+              llvm::raw_string_ostream OS_arg(cur_result.Name);
+              Args[I].getAsStructuralValue().printPretty(
+                  OS_arg, TheSema.getASTContext(),
+                  Args[I].getStructuralValueType());
+              OS_arg.str(); // flush to string.
+            }
+            if (QueryKind & LookForType) {
+              if (!cur_result.Name.empty())
+                cur_result.Name += " of type ";
+              RegisterQualTypeQueryResult(cur_result,
+                                          Args[I].getStructuralValueType());
+            }
+            break;
+          }
+
           case TemplateArgument::NullPtr: {
             if (QueryKind & LookForValue) {
               if (!cur_result.Name.empty())
