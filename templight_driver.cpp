@@ -672,7 +672,7 @@ int main(int argc_, const char **argv_) {
   ProcessWarningOptions(Diags, *DiagOpts, /*ReportDiags=*/false);
 
   // Prepare a variable for the return value:
-  int Res = 1;
+  int Res = 0;
 
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
@@ -741,6 +741,10 @@ int main(int argc_, const char **argv_) {
       return 1;
     }
 
+    // If there were errors building the compilation, quit now.
+    if (TheDriver.getDiags().hasErrorOccurred())
+      return 1;
+
     SmallVector<std::pair<int, const Command *>, 4> FailingCommands;
     for (auto &J : C->getJobs())
       ExecuteTemplightCommand(TheDriver, Diags, *C, J, ClangArgs[0],
@@ -781,10 +785,8 @@ int main(int argc_, const char **argv_) {
     // Remove temp files.
     C->CleanupFileList(C->getTempFiles());
 
-    // If there were any commands, and they all succeeded, then the number of
-    // failing commands should be zero:
-    if (!C->getJobs().empty())
-      Res = FailingCommands.size();
+    // If the command succeeded, the number of failing commands should zero:
+    Res = FailingCommands.size();
 
     // Otherwise, remove result files and print extra information about abnormal
     // failures.
