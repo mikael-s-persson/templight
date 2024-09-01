@@ -672,7 +672,7 @@ int main(int argc_, const char **argv_) {
   ProcessWarningOptions(Diags, *DiagOpts, /*ReportDiags=*/false);
 
   // Prepare a variable for the return value:
-  int Res = 0;
+  int Res = 1;
 
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
@@ -781,8 +781,10 @@ int main(int argc_, const char **argv_) {
     // Remove temp files.
     C->CleanupFileList(C->getTempFiles());
 
-    // If the command succeeded, the number of failing commands should zero:
-    Res = FailingCommands.size();
+    // If there were any commands, and they all succeeded, then the number of
+    // failing commands should be zero:
+    if (!C->getJobs().empty())
+      Res = FailingCommands.size();
 
     // Otherwise, remove result files and print extra information about abnormal
     // failures.
