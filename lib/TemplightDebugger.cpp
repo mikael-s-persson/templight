@@ -571,7 +571,7 @@ public:
     llvm::outs() << ((Entry.IsTemplateBegin) ? "Entering " : "Leaving  ")
                  << SynthesisKindStrings[Entry.Inst.Kind] << " of "
                  << Entry.Name << '\n'
-                 << "  at " << Entry.FileName << '|' << Entry.Line << '|'
+                 << "  at " << Entry.FileName << ':' << Entry.Line << ':'
                  << Entry.Column << " (Memory usage: " << Entry.MemoryUsage
                  << ")\n";
     if (verboseMode) {
@@ -796,7 +796,7 @@ public:
                  rec.QueryResults.begin();
              it != rec.QueryResults.end(); ++it) {
           llvm::outs() << "Found " << it->Name << '\n'
-                       << "  at " << it->FileName << '|' << it->Line << '|'
+                       << "  at " << it->FileName << ':' << it->Line << ':'
                        << it->Column << '\n';
           if (verboseMode && !it->SrcPointer.empty())
             llvm::outs() << it->SrcPointer << '\n';
@@ -814,7 +814,7 @@ public:
                  rec.QueryResults.begin();
              it != rec.QueryResults.end(); ++it) {
           llvm::outs() << "Found " << it->Name << '\n'
-                       << "  at " << it->FileName << '|' << it->Line << '|'
+                       << "  at " << it->FileName << ':' << it->Line << ':'
                        << it->Column << '\n';
           if (verboseMode && !it->SrcPointer.empty())
             llvm::outs() << it->SrcPointer << '\n';
@@ -833,7 +833,7 @@ public:
                  rec.QueryResults.begin();
              it != rec.QueryResults.end(); ++it) {
           llvm::outs() << "Found " << it->Name << '\n'
-                       << "  at " << it->FileName << '|' << it->Line << '|'
+                       << "  at " << it->FileName << ':' << it->Line << ':'
                        << it->Column << '\n';
           if (verboseMode && !it->SrcPointer.empty())
             llvm::outs() << it->SrcPointer << '\n';
@@ -851,7 +851,7 @@ public:
                  rec.QueryResults.begin();
              it != rec.QueryResults.end(); ++it) {
           llvm::outs() << "Found " << it->Name << '\n'
-                       << "  at " << it->FileName << '|' << it->Line << '|'
+                       << "  at " << it->FileName << ':' << it->Line << ':'
                        << it->Column << '\n';
           if (verboseMode && !it->SrcPointer.empty())
             llvm::outs() << it->SrcPointer << '\n';
@@ -901,7 +901,7 @@ public:
                  rec.QueryResults.begin();
              it != rec.QueryResults.end(); ++it) {
           llvm::outs() << "Found " << it->Name << '\n'
-                       << "  at " << it->FileName << '|' << it->Line << '|'
+                       << "  at " << it->FileName << ':' << it->Line << ':'
                        << it->Column << '\n';
           if (verboseMode && !it->SrcPointer.empty())
             llvm::outs() << it->SrcPointer << '\n';
@@ -921,7 +921,7 @@ public:
                  rec.QueryResults.begin();
              it != rec.QueryResults.end(); ++it) {
           llvm::outs() << "Found " << it->Name << '\n'
-                       << "  at " << it->FileName << '|' << it->Line << '|'
+                       << "  at " << it->FileName << ':' << it->Line << ':'
                        << it->Column << '\n';
           if (verboseMode && !it->SrcPointer.empty())
             llvm::outs() << it->SrcPointer << '\n';
@@ -979,8 +979,8 @@ public:
                  EntriesStack.rbegin();
              it != EntriesStack.rend(); ++it) {
           llvm::outs() << SynthesisKindStrings[it->Inst.Kind] << " of "
-                       << it->Name << " at " << it->FileName << '|' << it->Line
-                       << '|' << it->Column << '\n';
+                       << it->Name << " at " << it->FileName << ':' << it->Line
+                       << ':' << it->Column << '\n';
         }
         continue;
       } else {
