@@ -499,7 +499,7 @@ static void ExecuteTemplightCommand(
           CompilerInvocation::GetResourcesPath(Argv0, GetExecutablePathVP);
 
     // Create the compilers actual diagnostics engine.
-    Clang->createDiagnostics();
+    Clang->createDiagnostics(*llvm::vfs::getRealFileSystem());
     if (!Clang->hasDiagnostics()) {
       FailingCommands.push_back(std::make_pair(1, &J));
       return;
@@ -669,7 +669,7 @@ int main(int argc_, const char **argv_) {
         Diags.takeClient(), std::move(SerializedConsumer)));
   }
 
-  ProcessWarningOptions(Diags, *DiagOpts, /*ReportDiags=*/false);
+  ProcessWarningOptions(Diags, *DiagOpts, *llvm::vfs::getRealFileSystem(), /*ReportDiags=*/false);
 
   // Prepare a variable for the return value:
   int Res = 0;
@@ -707,7 +707,7 @@ int main(int argc_, const char **argv_) {
                                                GetExecutablePathVP);
 
     // Create the compilers actual diagnostics engine.
-    Clang->createDiagnostics();
+    Clang->createDiagnostics(*llvm::vfs::getRealFileSystem());
     if (!Clang->hasDiagnostics()) {
       return 1;
     }
